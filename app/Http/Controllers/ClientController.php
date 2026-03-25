@@ -144,6 +144,8 @@ class ClientController extends Controller
 
     public function storeRequest(Request $request)
     {
+        \Log::info('storeRequest called', $request->all());
+        
         $validated = $request->validate([
             'blood_type' => 'required|string',
             'units_required' => 'required|integer|min:1|max:10',
@@ -151,7 +153,10 @@ class ClientController extends Controller
             'reason' => 'required|string',
         ]);
 
+        \Log::info('Validation passed', $validated);
+        
         $user = Auth::user();
+        \Log::info('Creating request for user', ['user_id' => $user->id, 'name' => $user->name]);
         
         $bloodRequest = BloodRequest::create([
             'user_id' => $user->id,
@@ -167,6 +172,8 @@ class ClientController extends Controller
             'notes' => 'Emergency blood request',
             'expires_at' => now()->addDays(7),
         ]);
+
+        \Log::info('BloodRequest created', ['id' => $bloodRequest->id]);
 
         // Broadcast the new blood request
         broadcast(new BloodRequestCreated($bloodRequest))->toOthers();
@@ -347,7 +354,7 @@ class ClientController extends Controller
             ->first();
 
         if ($activeDonation) {
-            return redirect()->back()->with('error', 'You already have an active donation. Please complete it before registering for another.');
+            return back()->with('error', 'You already have an active donation. Please complete it before registering for another.');
         }
 
         // Check if user already registered for this specific request
@@ -356,7 +363,7 @@ class ClientController extends Controller
             ->first();
 
         if ($existingDonation) {
-            return redirect()->back()->with('error', 'You have already registered for this donation.');
+            return back()->with('error', 'You have already registered for this donation.');
         }
 
         // Create donation registration record (1 unit per donation)
@@ -389,7 +396,7 @@ class ClientController extends Controller
             $bloodRequest->save();
         }
 
-        return redirect()->back()->with('success', 'Successfully registered for donation!');
+        return back()->with('success', 'Successfully registered for donation!');
     }
 
     public function acceptRejectDonation(Request $request)
@@ -424,11 +431,15 @@ class ClientController extends Controller
 
     public function updateDonationStatus(Request $request)
     {
+        \Log::info('updateDonationStatus called', $request->all());
+        
         $validated = $request->validate([
             'blood_request_id' => 'required|exists:blood_requests,id',
             'donor_id' => 'required|exists:users,id',
             'status' => 'required|in:scheduled,in_progress,completed,cancelled',
         ]);
+
+        \Log::info('Validation passed', $validated);
 
         $bloodRequest = BloodRequest::findOrFail($validated['blood_request_id']);
         $donation = Donation::where('blood_request_id', $bloodRequest->id)
@@ -436,11 +447,20 @@ class ClientController extends Controller
             ->first();
 
         if (!$donation) {
+            \Log::error('Donation not found', [
+                'blood_request_id' => $bloodRequest->id,
+                'donor_id' => $validated['donor_id']
+            ]);
             return back()->with('error', 'No active donation found for this request.');
         }
 
+        \Log::info('Donation found', ['donation_id' => $donation->id, 'current_status' => $donation->status]);
+
+        $oldStatus = $donation->status;
         $donation->status = $validated['status'];
-        $donation->save();
+        $saved = $donation->save();
+
+        \Log::info('Donation save result', ['saved' => $saved, 'new_status' => $donation->status]);
 
         // If completed, update user's donation count and blood request
         if ($validated['status'] === 'completed') {
@@ -452,11 +472,17 @@ class ClientController extends Controller
             $bloodRequest->units_fulfilled = ($bloodRequest->units_fulfilled ?? 0) + $donation->units_donated;
             $bloodRequest->save();
             
+            \Log::info('Request updated', [
+                'units_fulfilled' => $bloodRequest->units_fulfilled,
+                'units_required' => $bloodRequest->units_required
+            ]);
+            
             // If all required units are now fulfilled, mark request as fulfilled
             if ($bloodRequest->units_fulfilled >= $bloodRequest->units_required) {
                 $bloodRequest->status = 'fulfilled';
                 $bloodRequest->fulfilled_at = now();
                 $bloodRequest->save();
+                \Log::info('Request marked as fulfilled');
             }
         }
 
@@ -494,7 +520,7 @@ class ClientController extends Controller
         $user->increment('total_donations');
         $user->update(['last_donation_date' => now()]);
 
-        return redirect()->route('dashboard')->with('success', 'Donation scheduled successfully!');
+        return back()->with('success', 'Donation scheduled successfully!');
     }
 
     public function inventory()

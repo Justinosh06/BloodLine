@@ -11,6 +11,7 @@ import { Head, Link, router, useForm } from '@inertiajs/react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { Plus, Activity, Heart, Shield, ChevronRight, Hash, Database } from "lucide-react";
+import { toast } from 'sonner';
 
 export default function ClientMainDashboard({ auth, hospitalStats, recentRequests, bloodInventory }) {
     const [isOpen, setIsOpen] = useState(false);
@@ -18,7 +19,7 @@ export default function ClientMainDashboard({ auth, hospitalStats, recentRequest
     const { data, setData, post, processing, errors } = useForm({
         blood_type: '',
         units_required: '',
-        urgency_level: 'normal',
+        urgency_level: 'medium',
         reason: 'Emergency blood request from hospital dashboard',
     });
 
@@ -26,15 +27,26 @@ export default function ClientMainDashboard({ auth, hospitalStats, recentRequest
 
     const submitRequest = (e) => {
         e.preventDefault();
+        console.log('Submitting request with data:', data);
         post(route('requests.store'), {
-            onSuccess: () => {
+            onSuccess: (page) => {
+                console.log('Request created successfully:', page);
                 setIsOpen(false);
                 setData({
                     blood_type: '',
                     units_required: '',
-                    urgency_level: 'normal',
+                    urgency_level: 'medium',
                     reason: 'Emergency blood request from hospital dashboard',
                 });
+                toast.success('Blood request created successfully!');
+                // Force page reload to show new request
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            },
+            onError: (errors) => {
+                console.error('Request creation failed:', errors);
+                toast.error('Failed to create request: ' + Object.values(errors).join(', '));
             }
         });
     };
@@ -53,13 +65,23 @@ export default function ClientMainDashboard({ auth, hospitalStats, recentRequest
                     </div>
                     <div className="flex justify-between items-end">
                         <h2 className="text-3xl font-black text-gray-900 tracking-tight">Hospital Dashboard</h2>
-                        <Button
-                            variant="outline"
-                            className="rounded-none border-gray-900 bg-gray-900 text-white hover:bg-gray-800 hover:text-white font-black uppercase tracking-widest text-[10px] h-10 px-6"
-                            onClick={() => openRequestModal()}
-                        >
-                            <Plus size={14} className="mr-2" /> Create Request
-                        </Button>
+                        <div className="flex gap-2">
+                            <Link href={route('requests.index')}>
+                                <Button
+                                    variant="outline"
+                                    className="rounded-none border-gray-300 text-gray-700 hover:bg-gray-100 font-black uppercase tracking-widest text-[10px] h-10 px-6"
+                                >
+                                    View All Requests
+                                </Button>
+                            </Link>
+                            <Button
+                                variant="outline"
+                                className="rounded-none border-gray-900 bg-gray-900 text-white hover:bg-gray-800 hover:text-white font-black uppercase tracking-widest text-[10px] h-10 px-6"
+                                onClick={() => openRequestModal()}
+                            >
+                                <Plus size={14} className="mr-2" /> Create Request
+                            </Button>
+                        </div>
                     </div>
                 </div>
             }
@@ -276,7 +298,8 @@ export default function ClientMainDashboard({ auth, hospitalStats, recentRequest
                                     <SelectContent className="rounded-none border-border">
                                         <SelectItem value="critical" className="rounded-none">Critical</SelectItem>
                                         <SelectItem value="high" className="rounded-none">High</SelectItem>
-                                        <SelectItem value="normal" className="rounded-none">Normal</SelectItem>
+                                        <SelectItem value="medium" className="rounded-none">Medium</SelectItem>
+                                        <SelectItem value="low" className="rounded-none">Low</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>

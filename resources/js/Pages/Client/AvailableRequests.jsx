@@ -138,26 +138,36 @@ This donor is available and eligible for donation.
     };
 
     const handleUpdateDonationStatus = (donation, status) => {
+        console.log('Updating donation status:', { donationId: donation.id, donorId: donation.donor_id, status });
+        
+        // Immediate UI feedback
+        toast.success(`Updating status to: ${status}...`);
+        
+        // Update local state immediately for responsive UI
+        setSelectedDonations(prev => 
+            prev.map(d => d.id === donation.id ? {...d, status} : d)
+        );
+        
         post(route('donations.update-status'), {
             blood_request_id: selectedRequest.id,
             donor_id: donation.donor_id,
             status: status
         }, {
+            preserveScroll: true,
             onSuccess: (page) => {
+                console.log('Status update SUCCESS:', page);
                 toast.success(`Donation status updated to: ${status}`);
-                // Update local state for immediate feedback
-                setSelectedDonations(prev => 
-                    prev.map(d => d.id === donation.id ? {...d, status} : d)
-                );
-                // Update the main requests data from the response
-                if (page.props.requests) {
-                    // The page data is automatically updated by Inertia
-                    console.log('Requests updated:', page.props.requests);
-                }
+                setShowDonorModal(false);
+                // Force immediate hard reload
+                window.location.reload();
             },
             onError: (errors) => {
-                toast.error('Error updating donation status. Please try again.');
-                console.error('Update errors:', errors);
+                console.error('Status update FAILED:', errors);
+                toast.error('Error: ' + (errors.message || Object.values(errors).join(', ')));
+            },
+            onFinish: () => {
+                console.log('Request finished - reloading page');
+                window.location.reload();
             }
         });
     };
