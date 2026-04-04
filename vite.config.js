@@ -10,7 +10,4 @@ export default defineConfig({
         }),
         react(),
     ],
-    optimizeDeps: {
-        include: ['@heroui/react'],
-    },
 });

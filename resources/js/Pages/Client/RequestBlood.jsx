@@ -3,123 +3,175 @@ import { Input } from "@/Components/ui/input";
 import { Button } from "@/Components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/Components/ui/card";
 import { Textarea } from "@/Components/ui/textarea";
+import { Label } from "@/Components/ui/label";
 import { useForm, Head } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Activity, AlertCircle, ChevronRight, Zap } from "lucide-react";
+import { Activity, AlertCircle, ChevronRight, Zap, Droplets, Info, Hash } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
+import { toast } from "sonner";
 
 export default function RequestBlood() {
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors, reset } = useForm({
         blood_type: '',
-        units_required: '',
+        units_required: 1,
         urgency_level: 'medium',
         reason: '',
     });
 
     const submit = (e) => {
         e.preventDefault();
-        post(route('requests.store'));
+        post(route('requests.store'), {
+            onSuccess: () => {
+                reset();
+            },
+            onError: (errors) => {
+                const firstError = Object.values(errors)[0];
+                toast.error(firstError || "Failed to broadcast request.");
+            }
+        });
+    };
+
+    const container = {
+        hidden: { opacity: 0 },
+        show: {
+            opacity: 1,
+            transition: { staggerChildren: 0.1 }
+        }
+    };
+
+    const item = {
+        hidden: { opacity: 0, y: 20 },
+        show: { opacity: 1, y: 0 }
     };
 
     return (
         <AuthenticatedLayout
             header={
                 <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-1">
-                        Infrastructure <ChevronRight size={10} /> Emergency Protocol
+                    <div className="flex items-center gap-2 text-xs font-bold text-red-600 uppercase tracking-widest mb-2 bg-red-50 w-fit px-3 py-1 rounded-full">
+                        <Zap size={14} /> Emergency Protocol
                     </div>
-                    <h2 className="text-3xl font-black text-gray-900 tracking-tight">Request Resource</h2>
+                    <h2 className="text-4xl font-extrabold text-gray-900 tracking-tight">Broadcast Request</h2>
+                    <p className="text-gray-500 mt-2 font-medium">Alert the regional network of donors about an urgent clinical need.</p>
                 </div>
             }
         >
             <Head title="Request Blood" />
 
-            <div className="max-w-2xl mx-auto py-8">
-                <Card className="border-border bg-white shadow-none rounded-none">
-                    <CardHeader className="pb-8 pt-10 px-10 border-b border-border bg-gray-50/30">
-                        <div className="flex items-center gap-2 text-indigo-600 font-bold text-xs uppercase tracking-widest mb-2">
-                            <Zap size={14} /> Priority Transmission
-                        </div>
-                        <CardTitle className="text-2xl font-black tracking-tight text-gray-900">Initiate Payload</CardTitle>
-                        <CardDescription className="text-gray-500 font-medium">Broadcast biological requirements to the distributed node network.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-10">
-                        <form onSubmit={submit} className="space-y-8">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Biological Type</label>
-                                <Select
-                                    value={data.blood_type}
-                                    onValueChange={val => setData('blood_type', val)}
-                                >
-                                    <SelectTrigger className={`h-12 bg-gray-50/50 border-border rounded-none font-bold ${errors.blood_type ? 'border-red-500' : ''}`}>
-                                        <SelectValue placeholder="Select type..." />
-                                    </SelectTrigger>
-                                    <SelectContent className="rounded-none border-border">
-                                        {["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"].map(t => (
-                                            <SelectItem key={t} value={t} className="font-bold rounded-none">{t} Group</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {errors.blood_type && <p className="text-red-500 text-[10px] font-black uppercase tracking-widest mt-1">{errors.blood_type}</p>}
+            <motion.div 
+                variants={container}
+                initial="hidden"
+                animate="show"
+                className="max-w-3xl mx-auto py-10"
+            >
+                <motion.div variants={item}>
+                    <Card className="border-none bg-white shadow-xl shadow-gray-100/50 rounded-[2.5rem] overflow-hidden">
+                        <div className="bg-red-600 p-10 text-white relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-4 opacity-10">
+                                <Droplets size={160} />
                             </div>
-
+                            <h3 className="text-3xl font-black tracking-tight relative z-10">Request Payload</h3>
+                            <p className="text-red-100 mt-2 font-medium relative z-10">
+                                Please provide accurate clinical details for the emergency broadcast.
+                            </p>
+                        </div>
+                        
+                        <form onSubmit={submit} className="p-10 space-y-8">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Resource Load (Units)</label>
-                                    <Input
-                                        type="number"
-                                        min="1"
-                                        placeholder="0"
-                                        value={data.units_required}
-                                        onChange={e => setData('units_required', e.target.value)}
-                                        className={`h-12 bg-gray-50/50 border-border rounded-none font-bold ${errors.units_required ? 'border-red-500' : ''}`}
-                                    />
-                                    {errors.units_required && <p className="text-red-500 text-[10px] font-black uppercase tracking-widest mt-1">{errors.units_required}</p>}
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Urgency Priority</label>
+                                <div className="space-y-3">
+                                    <Label className="text-sm font-bold text-gray-700 ml-1">Blood Type Required</Label>
                                     <Select
-                                        value={data.urgency_level}
-                                        onValueChange={val => setData('urgency_level', val)}
+                                        value={data.blood_type}
+                                        onValueChange={val => setData('blood_type', val)}
                                     >
-                                        <SelectTrigger className="h-12 bg-gray-50/50 border-border rounded-none font-bold">
-                                            <SelectValue placeholder="Priority Level..." />
+                                        <SelectTrigger className={cn(
+                                            "h-14 bg-gray-50/50 border-none rounded-2xl font-bold focus:ring-red-500 transition-all",
+                                            errors.blood_type ? 'ring-2 ring-red-500' : ''
+                                        )}>
+                                            <SelectValue placeholder="Select type..." />
                                         </SelectTrigger>
-                                        <SelectContent className="rounded-none border-border">
-                                            <SelectItem value="critical" className="font-bold rounded-none">Level 1: Critical</SelectItem>
-                                            <SelectItem value="high" className="font-bold rounded-none">Level 2: High</SelectItem>
-                                            <SelectItem value="medium" className="font-bold rounded-none">Level 3: Medium</SelectItem>
-                                            <SelectItem value="low" className="font-bold rounded-none">Level 4: Low</SelectItem>
+                                        <SelectContent className="rounded-2xl border-none shadow-2xl">
+                                            {["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"].map(t => (
+                                                <SelectItem key={t} value={t} className="font-bold rounded-xl focus:bg-red-50 focus:text-red-600">{t} Group</SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
+                                    {errors.blood_type && <p className="text-red-600 text-xs font-bold ml-1">{errors.blood_type}</p>}
+                                </div>
+
+                                <div className="space-y-3">
+                                    <Label className="text-sm font-bold text-gray-700 ml-1">Units Required</Label>
+                                    <div className="relative">
+                                        <Hash className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                        <Input
+                                            type="number"
+                                            min="1"
+                                            max="20"
+                                            placeholder="e.g. 5"
+                                            value={data.units_required}
+                                            onChange={e => setData('units_required', e.target.value)}
+                                            className={cn(
+                                                "pl-11 h-14 bg-gray-50/50 border-none rounded-2xl font-bold focus:ring-red-500 transition-all",
+                                                errors.units_required ? 'ring-2 ring-red-500' : ''
+                                            )}
+                                        />
+                                    </div>
+                                    {errors.units_required && <p className="text-red-600 text-xs font-bold ml-1">{errors.units_required}</p>}
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Technical Justification</label>
+                            <div className="space-y-4">
+                                <Label className="text-sm font-bold text-gray-700 ml-1">Urgency Priority</Label>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    {['low', 'medium', 'high', 'critical'].map(level => (
+                                        <button
+                                            key={level}
+                                            type="button"
+                                            onClick={() => setData('urgency_level', level)}
+                                            className={cn(
+                                                "py-3 rounded-2xl text-xs font-black uppercase tracking-widest border-2 transition-all",
+                                                data.urgency_level === level 
+                                                    ? "bg-red-600 border-red-600 text-white shadow-lg shadow-red-100 scale-105" 
+                                                    : "bg-white border-gray-50 text-gray-400 hover:border-gray-100"
+                                            )}
+                                        >
+                                            {level}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <Label className="text-sm font-bold text-gray-700 ml-1">Clinical Justification</Label>
                                 <Textarea
-                                    placeholder="Clinical notes, patient status, or infrastructure requirements..."
+                                    placeholder="Briefly describe the medical necessity for this request..."
                                     value={data.reason}
                                     onChange={e => setData('reason', e.target.value)}
-                                    className="min-h-[120px] bg-gray-50/50 border-border rounded-none p-4 text-sm font-medium"
+                                    className="min-h-[150px] bg-gray-50/50 border-none rounded-[1.5rem] p-6 text-sm font-medium focus:ring-red-500 transition-all"
                                 />
                             </div>
 
-                            <div className="pt-4">
+                            <div className="pt-6">
                                 <Button
                                     type="submit"
-                                    disabled={processing}
-                                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-widest text-[10px] h-14 rounded-none shadow-none transition-all active:scale-[0.98]"
+                                    disabled={processing || !data.blood_type}
+                                    className="w-full bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest text-xs h-16 rounded-full shadow-xl shadow-red-100 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {processing ? "Creating Request..." : "Create Blood Request"}
+                                    {processing ? "Broadcasting..." : "Broadcast Emergency Request"}
                                 </Button>
-                                <p className="text-center text-gray-400 text-[10px] font-black uppercase tracking-widest mt-6 flex items-center justify-center gap-2">
-                                    <AlertCircle className="h-3 w-3" /> Secure Node Transmission Guaranteed
-                                </p>
+                                
+                                <div className="mt-8 p-4 bg-blue-50/50 rounded-2xl flex items-start gap-3 border border-blue-100">
+                                    <Info className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+                                    <p className="text-xs text-blue-700 font-medium leading-relaxed">
+                                        This request will be broadcasted to all eligible donors within the regional network. Ensure all clinical information is verified before transmission.
+                                    </p>
+                                </div>
                             </div>
                         </form>
-                    </CardContent>
-                </Card>
-            </div>
+                    </Card>
+                </motion.div>
+            </motion.div>
         </AuthenticatedLayout>
     );
 }

@@ -4,7 +4,7 @@ import { Input } from "@/Components/ui/input";
 import { Button } from "@/Components/ui/button";
 import { Checkbox } from "@/Components/ui/checkbox";
 import { Head, useForm, Link } from '@inertiajs/react';
-import { Shield, ArrowRight, Activity } from "lucide-react";
+import { Heart, Mail, Lock, ArrowRight } from "lucide-react";
 
 export default function Login({ status, canResetPassword }) {
     const { data, setData, post, processing, errors, reset } = useForm({
@@ -20,72 +20,93 @@ export default function Login({ status, canResetPassword }) {
 
     return (
         <GuestLayout>
-            <Head title="Node Authentication" />
+            <Head title="Sign in to BloodLine" />
 
-            <form onSubmit={submit} className="flex flex-col gap-6">
-                <div className="flex flex-col gap-1 mb-4">
-                    <div className="flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest">
-                        <Shield size={10} /> Identity Verification
+            <div className="space-y-6">
+                <div className="text-center space-y-2">
+                    <div className="flex justify-center">
+                        <div className="bg-red-600 p-3 rounded-2xl shadow-lg">
+                            <Heart className="h-8 w-8 text-white fill-current" />
+                        </div>
                     </div>
-                    <h2 className="text-2xl font-black text-gray-900 tracking-tight uppercase">Access Portal</h2>
-                    <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mt-1">Authorized personnel only // System: BL_GRID</p>
-                </div>
-
-                <div className="space-y-4">
-                    <Input
-                        label="PROTOCOL_EMAIL"
-                        type="email"
-                        placeholder="identity@grid.local"
-                        value={data.email}
-                        onChange={(e) => setData('email', e.target.value)}
-                        isInvalid={!!errors.email}
-                        errorMessage={errors.email}
-                        className="rounded-none border-border"
-                    />
-
-                    <Input
-                        label="SECURE_PHRASE"
-                        type="password"
-                        placeholder="••••••••"
-                        value={data.password}
-                        onChange={(e) => setData('password', e.target.value)}
-                        isInvalid={!!errors.password}
-                        errorMessage={errors.password}
-                        className="rounded-none border-border"
-                    />
-                </div>
-
-                <div className="flex items-center justify-between">
-                    <Checkbox
-                        checked={data.remember}
-                        onCheckedChange={(val) => setData('remember', val)}
-                        className="rounded-none"
-                    >
-                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Keep Sync</span>
-                    </Checkbox>
-                    <Link
-                        href={route('password.request')}
-                        className="text-[10px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest transition-colors"
-                    >
-                        Recovery System
-                    </Link>
-                </div>
-
-                <Button
-                    type="submit"
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-none font-black text-[10px] uppercase tracking-widest h-12 shadow-none flex items-center justify-center gap-2"
-                    isLoading={processing}
-                    disabled={processing}
-                >
-                    {processing ? "AUTHENTICATING..." : "INITIATE ACCESS"} <ArrowRight size={14} />
-                </Button>
-
-                <div className="pt-6 border-t border-border mt-2">
-                    <p className="text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                        New Node Identity? <Link href="/register" className="text-indigo-600 hover:underline">Register Sequential</Link>
+                    <h2 className="mt-4 text-2xl font-extrabold text-gray-900 tracking-tight">
+                        Welcome back
+                    </h2>
+                    <p className="text-sm text-gray-600">
+                        Sign in to access your BloodLine dashboard.
                     </p>
                 </div>
-            </form>
+
+                <form onSubmit={submit} className="space-y-5">
+                    <div className="space-y-2">
+                        <label className="text-sm font-semibold text-gray-700">Email address</label>
+                        <div className="relative">
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <Input
+                                type="email"
+                                placeholder="you@example.com"
+                                value={data.email}
+                                onChange={(e) => setData('email', e.target.value)}
+                                className="pl-9"
+                            />
+                        </div>
+                        {errors.email && (
+                            <p className="text-xs text-red-600">{errors.email}</p>
+                        )}
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-semibold text-gray-700">Password</label>
+                        <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <Input
+                                type="password"
+                                placeholder="••••••••"
+                                value={data.password}
+                                onChange={(e) => setData('password', e.target.value)}
+                                className="pl-9"
+                            />
+                        </div>
+                        {errors.password && (
+                            <p className="text-xs text-red-600">{errors.password}</p>
+                        )}
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Checkbox
+                                checked={data.remember}
+                                onCheckedChange={(val) => setData('remember', val)}
+                            />
+                            <span className="text-xs text-gray-600">Remember me</span>
+                        </div>
+                        {canResetPassword && (
+                            <Link
+                                href={route('password.request')}
+                                className="text-xs font-semibold text-red-600 hover:text-red-700"
+                            >
+                                Forgot password?
+                            </Link>
+                        )}
+                    </div>
+
+                    <Button
+                        type="submit"
+                        className="w-full h-11 text-sm font-bold bg-red-600 hover:bg-red-700"
+                        disabled={processing}
+                    >
+                        {processing ? "Signing in..." : "Sign In"}
+                        {!processing && <ArrowRight className="ml-2 h-4 w-4" />}
+                    </Button>
+                </form>
+
+                <p className="text-center text-xs text-gray-500">
+                    New to BloodLine?{" "}
+                    <Link href="/register" className="font-semibold text-red-600 hover:text-red-700">
+                        Create an account
+                    </Link>
+                </p>
+            </div>
         </GuestLayout>
     );
 }

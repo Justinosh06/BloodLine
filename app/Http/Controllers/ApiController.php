@@ -6,16 +6,31 @@ use App\Models\BloodRequest;
 use App\Models\BloodStock;
 use App\Models\Donation;
 use App\Models\User;
+use App\Services\BloodRequestService;
+use App\Services\DonationService;
+use App\Services\AnalyticsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class ApiController extends Controller
 {
-    // Get available blood requests for donors
+    protected $bloodRequestService;
+    protected $donationService;
+    protected $analyticsService;
+
+    public function __construct(
+        BloodRequestService $bloodRequestService, 
+        DonationService $donationService,
+        AnalyticsService $analyticsService
+    ) {
+        $this->bloodRequestService = $bloodRequestService;
+        $this->donationService = $donationService;
+        $this->analyticsService = $analyticsService;
+    }
+
     public function getAvailableRequests(Request $request)
     {
         $user = Auth::user();
-        
         $requests = BloodRequest::where('status', 'pending')
             ->where('expires_at', '>', now())
             ->when($user->isDonor(), function ($query) use ($user) {
@@ -28,17 +43,16 @@ class ApiController extends Controller
         return response()->json($requests);
     }
 
-    // Get hospital inventory
     public function getHospitalInventory()
     {
         $user = Auth::user();
-        
         $bloodStocks = BloodStock::where('hospital_id', $user->id)
             ->get()
             ->map(function ($stock) {
                 return [
                     'id' => $stock->id,
                     'blood_type' => $stock->blood_type,
+                    'available' => $stock->getAvailableUnits(),
                     'available_units' => $stock->getAvailableUnits(),
                     'status' => $stock->isCriticalStock() ? 'critical' : ($stock->isLowStock() ? 'low' : 'adequate'),
                 ];
@@ -47,119 +61,82 @@ class ApiController extends Controller
         return response()->json($bloodStocks);
     }
 
-    // Get donor statistics
     public function getDonorStats()
     {
         $user = Auth::user();
-        
-        $stats = [
+        return response()->json([
             'totalDonations' => $user->total_donations,
             'lastDonation' => $user->last_donation_date,
-            'eligibilityDays' => $user->canDonate() ? 0 : max(0, 56 - $user->last_donation_date->diffInDays(now())),
+            'eligibilityDays' => $user->canDonate() ? 0 : max(0, 56 - ($user->last_donation_date ? $user->last_donation_date->diffInDays(now()) : 0)),
             'bloodType' => $user->blood_type,
             'isAvailable' => $user->canDonate(),
-        ];
-
-        return response()->json($stats);
+        ]);
     }
 
-    // Get hospital statistics
     public function getHospitalStats()
     {
         $user = Auth::user();
-        
-        $stats = [
+        return response()->json([
             'totalRequests' => BloodRequest::where('user_id', $user->id)->count(),
             'pendingRequests' => BloodRequest::where('user_id', $user->id)->where('status', 'pending')->count(),
             'fulfilledRequests' => BloodRequest::where('user_id', $user->id)->where('status', 'fulfilled')->count(),
             'totalUnitsRequested' => BloodRequest::where('user_id', $user->id)->sum('units_required'),
-        ];
-
-        return response()->json($stats);
+        ]);
     }
 
-    // Create blood donation
-    public function createDonation(Request $request)
-    {
-        $validated = $request->validate([
-            'blood_request_id' => 'nullable|exists:blood_requests,id',
-            'hospital_id' => 'required|exists:users,id',
-            'donation_date' => 'required|date|after_or_equal:today',
-            'donation_center' => 'required|string',
-        ]);
-
-        $user = Auth::user();
-        
-        if (!$user->canDonate()) {
-            return response()->json(['error' => 'You are not eligible to donate at this time'], 422);
-        }
-
-        $donation = Donation::create([
-            'donor_id' => $user->id,
-            'blood_request_id' => $validated['blood_request_id'],
-            'hospital_id' => $validated['hospital_id'],
-            'donation_date' => $validated['donation_date'],
-            'blood_type' => $user->blood_type,
-            'units_donated' => 1,
-            'status' => 'scheduled',
-            'donation_center' => $validated['donation_center'],
-        ]);
-
-        return response()->json($donation, 201);
-    }
-
-    // Update blood request status
     public function updateRequestStatus(Request $request, BloodRequest $bloodRequest)
     {
         $validated = $request->validate([
-            'status' => 'required|in:pending,fulfilled,cancelled,expired',
-            'units_fulfilled' => 'nullable|integer|min:0',
+            'status' => 'required|string|in:pending,fulfilled,cancelled',
         ]);
 
-        $bloodRequest->update($validated);
+        $bloodRequest->update([
+            'status' => $validated['status'],
+        ]);
 
-        if ($validated['status'] === 'fulfilled') {
-            $bloodRequest->update([
-                'fulfilled_at' => now(),
-                'units_fulfilled' => $validated['units_fulfilled'] ?? $bloodRequest->units_required,
-            ]);
+        return response()->json($bloodRequest->fresh());
+    }
+
+    public function createDonation(Request $request)
+    {
+        $validated = $request->validate([
+            'blood_request_id' => 'required|exists:blood_requests,id',
+            'units_donated' => 'required|integer|min:1|max:2',
+        ]);
+
+        $user = Auth::user();
+        if (!$user->canDonate()) {
+            return response()->json(['error' => 'Not eligible'], 422);
         }
 
-        return response()->json($bloodRequest);
+        try {
+            $donation = $this->donationService->registerDonation(
+                $validated['blood_request_id'],
+                $user->id,
+                $validated['units_donated']
+            );
+            return response()->json($donation);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Registration failed'], 500);
+        }
     }
 
-    // Get system statistics for admin
     public function getSystemStats()
     {
-        $stats = [
-            'totalDonors' => User::where('role', 'donor')->count(),
-            'totalHospitals' => User::where('role', 'hospital')->count(),
-            'pendingRequests' => BloodRequest::where('status', 'pending')->count(),
-            'completedDonations' => Donation::where('status', 'completed')->count(),
-            'totalUnitsCollected' => Donation::where('status', 'completed')->sum('units_donated'),
-            'urgentRequests' => BloodRequest::whereIn('urgency_level', ['high', 'critical'])
-                ->where('status', 'pending')->count(),
-        ];
-
-        return response()->json($stats);
+        return response()->json($this->analyticsService->getSystemStats());
     }
 
-    // Search donors by blood type and location
     public function searchDonors(Request $request)
     {
         $validated = $request->validate([
-            'blood_type' => 'required|string',
-            'location' => 'nullable|string',
+            'blood_type' => 'nullable|string',
+            'city' => 'nullable|string',
         ]);
 
-        $donors = User::where('role', 'donor')
-            ->where('blood_type', $validated['blood_type'])
-            ->where('is_available', true)
-            ->when(isset($validated['location']), function ($query) use ($validated) {
-                return $query->where('address', 'like', '%' . $validated['location'] . '%');
-            })
-            ->get(['id', 'name', 'blood_type', 'phone', 'last_donation_date', 'total_donations']);
+        $query = User::where('role', 'donor')->where('is_available', true);
+        if ($request->blood_type) $query->where('blood_type', $request->blood_type);
+        if ($request->city) $query->where('address', 'like', "%{$request->city}%");
 
-        return response()->json($donors);
+        return response()->json($query->get());
     }
 }

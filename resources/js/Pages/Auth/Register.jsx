@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Head, useForm, Link } from '@inertiajs/react';
 import { Input } from "@/Components/ui/input";
 import { Button } from "@/Components/ui/button";
@@ -12,10 +12,11 @@ import {
     SelectValue,
 } from "@/Components/ui/select";
 import GuestLayout from '@/Layouts/GuestLayout';
-import { ChevronRight, Shield, User, Landmark, ArrowRight, Activity } from "lucide-react";
+import { Heart, Mail, Lock, User, Phone, ArrowRight, Hospital } from "lucide-react";
+import { motion } from "framer-motion";
 
 export default function Register() {
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors, reset } = useForm({
         name: '',
         email: '',
         password: '',
@@ -29,144 +30,199 @@ export default function Register() {
 
     const submit = (e) => {
         e.preventDefault();
-        post(route('register'));
+        post(route('register'), {
+            onFinish: () => reset('password', 'password_confirmation'),
+        });
     };
 
     return (
         <GuestLayout>
-            <Head title="Sequential Registration" />
+            <Head title="Create Account" />
 
-            <div className="w-full">
-                <div className="flex flex-col gap-1 mb-8">
-                    <div className="flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest">
-                        <Activity size={10} /> Network Integration
+            <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+                className="space-y-6"
+            >
+                <div className="text-center space-y-2">
+                    <div className="flex justify-center">
+                        <div className="bg-red-600 p-3 rounded-2xl shadow-lg">
+                            <Heart className="h-8 w-8 text-white fill-current" />
+                        </div>
                     </div>
-                    <h2 className="text-2xl font-black text-gray-900 tracking-tight uppercase">New Node Registry</h2>
-                    <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mt-1">Initialize link with the biological grid.</p>
+                    <h2 className="mt-4 text-2xl font-extrabold text-gray-900 tracking-tight">
+                        Create Account
+                    </h2>
+                    <p className="text-sm text-gray-600">
+                        Join the network and help save lives.
+                    </p>
                 </div>
 
-                <form onSubmit={submit} className="flex flex-col gap-8">
-                    {/* Role Selection Matrix */}
-                    <div className="space-y-4">
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Entity Classification</label>
+                <form onSubmit={submit} className="space-y-5">
+                    {/* Role Selection */}
+                    <div className="space-y-3">
+                        <label className="text-sm font-semibold text-gray-700">I am a...</label>
                         <RadioGroup
                             value={data.role}
                             onValueChange={(val) => setData('role', val)}
-                            className="flex gap-4"
+                            className="grid grid-cols-2 gap-3"
                         >
-                            <label className={`flex-1 flex items-center justify-center gap-2 p-4 border border-border cursor-pointer transition-all ${data.role === 'donor' ? 'bg-indigo-50 border-indigo-200' : 'bg-white hover:bg-gray-50'}`}>
+                            <div 
+                                className={`relative flex items-center justify-center p-3 rounded-xl border-2 transition-all cursor-pointer ${data.role === 'donor' ? 'border-red-600 bg-red-50 text-red-600' : 'border-gray-100 bg-white text-gray-500 hover:border-gray-200'}`} 
+                                onClick={() => setData('role', 'donor')}
+                            >
                                 <RadioGroupItem value="donor" className="sr-only" />
-                                <User size={14} className={data.role === 'donor' ? 'text-indigo-600' : 'text-gray-400'} />
-                                <span className={`text-[10px] font-black uppercase tracking-widest ${data.role === 'donor' ? 'text-indigo-700' : 'text-gray-500'}`}>Donor_Unit</span>
-                            </label>
-                            <label className={`flex-1 flex items-center justify-center gap-2 p-4 border border-border cursor-pointer transition-all ${data.role === 'hospital' ? 'bg-indigo-50 border-indigo-200' : 'bg-white hover:bg-gray-50'}`}>
+                                <div className="flex flex-col items-center gap-1">
+                                    <User size={20} />
+                                    <span className="text-xs font-bold uppercase tracking-wider">Donor</span>
+                                </div>
+                            </div>
+                            <div 
+                                className={`relative flex items-center justify-center p-3 rounded-xl border-2 transition-all cursor-pointer ${data.role === 'hospital' ? 'border-red-600 bg-red-50 text-red-600' : 'border-gray-100 bg-white text-gray-500 hover:border-gray-200'}`} 
+                                onClick={() => setData('role', 'hospital')}
+                            >
                                 <RadioGroupItem value="hospital" className="sr-only" />
-                                <Landmark size={14} className={data.role === 'hospital' ? 'text-indigo-600' : 'text-gray-400'} />
-                                <span className={`text-[10px] font-black uppercase tracking-widest ${data.role === 'hospital' ? 'text-indigo-700' : 'text-gray-500'}`}>Hospital_Node</span>
-                            </label>
+                                <div className="flex flex-col items-center gap-1">
+                                    <Hospital size={20} />
+                                    <span className="text-xs font-bold uppercase tracking-wider">Hospital</span>
+                                </div>
+                            </div>
                         </RadioGroup>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Input
-                            required
-                            label={data.role === 'donor' ? "UNIT_ID_NAME" : "NODE_DESIGNATION"}
-                            placeholder={data.role === 'donor' ? "John Doe" : "City Central"}
-                            value={data.name}
-                            onChange={e => setData('name', e.target.value)}
-                            isInvalid={!!errors.name}
-                            errorMessage={errors.name}
-                            className="rounded-none shadow-none"
-                        />
-                        <Input
-                            required
-                            label="COMM_CHANNEL_EMAIL"
-                            type="email"
-                            placeholder="identity@grid.local"
-                            value={data.email}
-                            onChange={e => setData('email', e.target.value)}
-                            isInvalid={!!errors.email}
-                            errorMessage={errors.email}
-                            className="rounded-none shadow-none"
-                        />
+                    <div className="space-y-2">
+                        <label className="text-sm font-semibold text-gray-700">Full Name</label>
+                        <div className="relative">
+                            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <Input
+                                required
+                                placeholder={data.role === 'donor' ? "John Doe" : "City Central Hospital"}
+                                value={data.name}
+                                onChange={e => setData('name', e.target.value)}
+                                className="pl-9"
+                                isInvalid={!!errors.name}
+                            />
+                        </div>
+                        {errors.name && <p className="text-xs text-red-600">{errors.name}</p>}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Input
-                            label="UPLINK_TELEMETRY_PHONE"
-                            placeholder="+10000000000"
-                            value={data.phone}
-                            onChange={e => setData('phone', e.target.value)}
-                            className="rounded-none shadow-none"
-                        />
+                    <div className="space-y-2">
+                        <label className="text-sm font-semibold text-gray-700">Email address</label>
+                        <div className="relative">
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <Input
+                                required
+                                type="email"
+                                placeholder="you@example.com"
+                                value={data.email}
+                                onChange={e => setData('email', e.target.value)}
+                                className="pl-9"
+                                isInvalid={!!errors.email}
+                            />
+                        </div>
+                        {errors.email && <p className="text-xs text-red-600">{errors.email}</p>}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-semibold text-gray-700">Phone</label>
+                            <div className="relative">
+                                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                <Input
+                                    required
+                                    placeholder="+1..."
+                                    value={data.phone}
+                                    onChange={e => setData('phone', e.target.value)}
+                                    className="pl-9"
+                                    isInvalid={!!errors.phone}
+                                />
+                            </div>
+                            {errors.phone && <p className="text-xs text-red-600">{errors.phone}</p>}
+                        </div>
+
                         {data.role === 'donor' && (
-                            <div className="flex flex-col gap-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Biological_Band</label>
+                            <div className="space-y-2">
+                                <label className="text-sm font-semibold text-gray-700">Blood Type</label>
                                 <Select
                                     value={data.blood_type}
                                     onValueChange={(val) => setData('blood_type', val)}
                                 >
-                                    <SelectTrigger className="rounded-none shadow-none border-border h-10 text-[10px] font-black uppercase">
-                                        <SelectValue placeholder="SELECT_BAND" />
+                                    <SelectTrigger className="h-10 border-gray-100 focus:ring-red-600">
+                                        <SelectValue placeholder="Select" />
                                     </SelectTrigger>
-                                    <SelectContent className="rounded-none shadow-none border-border">
+                                    <SelectContent>
                                         {bloodTypes.map((type) => (
-                                            <SelectItem key={type} value={type} className="text-[10px] font-black">
+                                            <SelectItem key={type} value={type}>
                                                 {type}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                {errors.blood_type && <p className="text-xs text-red-600">{errors.blood_type}</p>}
                             </div>
                         )}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-border">
-                        <Input
-                            required
-                            label="SECURE_PHRASE"
-                            type="password"
-                            placeholder="••••••••"
-                            value={data.password}
-                            onChange={e => setData('password', e.target.value)}
-                            isInvalid={!!errors.password}
-                            errorMessage={errors.password}
-                            className="rounded-none shadow-none"
-                        />
-                        <Input
-                            required
-                            label="VALIDATE_PHRASE"
-                            type="password"
-                            placeholder="••••••••"
-                            value={data.password_confirmation}
-                            onChange={e => setData('password_confirmation', e.target.value)}
-                            className="rounded-none shadow-none"
-                        />
+                    <div className="space-y-2">
+                        <label className="text-sm font-semibold text-gray-700">Password</label>
+                        <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <Input
+                                required
+                                type="password"
+                                placeholder="••••••••"
+                                value={data.password}
+                                onChange={e => setData('password', e.target.value)}
+                                className="pl-9"
+                                isInvalid={!!errors.password}
+                            />
+                        </div>
+                        {errors.password && <p className="text-xs text-red-600">{errors.password}</p>}
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-semibold text-gray-700">Confirm Password</label>
+                        <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <Input
+                                required
+                                type="password"
+                                placeholder="••••••••"
+                                value={data.password_confirmation}
+                                onChange={e => setData('password_confirmation', e.target.value)}
+                                className="pl-9"
+                            />
+                        </div>
                     </div>
 
                     <Checkbox
                         required
-                        className="rounded-none"
+                        id="terms"
+                        className="mt-1"
                     >
-                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                            ACKNOWLEDGE <Link className="text-indigo-600 underline">NETWORK_PROTOCOLS</Link>
+                        <span className="text-xs text-gray-600 leading-normal cursor-pointer">
+                            I agree to the <Link className="font-semibold text-red-600 hover:underline">Terms of Service</Link> and <Link className="font-semibold text-red-600 hover:underline">Privacy Policy</Link>.
                         </span>
                     </Checkbox>
 
                     <Button
                         type="submit"
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-none font-black text-[10px] uppercase tracking-widest h-12 shadow-none flex items-center justify-center gap-2"
+                        className="w-full h-11 text-sm font-bold bg-red-600 hover:bg-red-700 border-none text-white"
                         disabled={processing}
                     >
-                        {processing ? "SYNCING..." : (data.role === 'donor' ? 'INTEGRATE_UNIT' : 'INTEGRATE_NODE')} <ArrowRight size={14} />
+                        {processing ? "Creating Account..." : "Join BloodLine"}
+                        {!processing && <ArrowRight className="ml-2 h-4 w-4" />}
                     </Button>
-
-                    <p className="text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                        Already Synchronized? <Link href="/login" className="text-indigo-600 hover:underline">Access Portal</Link>
-                    </p>
                 </form>
-            </div>
+
+                <p className="text-center text-xs text-gray-500">
+                    Already have an account?{" "}
+                    <Link href="/login" className="font-semibold text-red-600 hover:text-red-700">
+                        Sign In
+                    </Link>
+                </p>
+            </motion.div>
         </GuestLayout>
     );
 }
-

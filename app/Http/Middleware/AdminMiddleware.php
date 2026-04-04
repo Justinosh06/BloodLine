@@ -10,9 +10,10 @@ class AdminMiddleware
 {
     public function handle(Request $request, Closure $next)
     {
-        if (Auth::check() && (Auth::user()->role === 'admin' || Auth::user()->role === 'hospital')) {
+        if (Auth::check() && Auth::user()->role === 'admin') {
             return $next($request);
         }
+
         return redirect('/dashboard')->with('error', 'Access denied. Admin privileges required.');
     }
 }

@@ -5,322 +5,360 @@ import { Badge } from "@/Components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/Components/ui/dialog";
 import { Input } from "@/Components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/Components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/Components/ui/tabs";
+import { Label } from "@/Components/ui/label";
+import { Textarea } from "@/Components/ui/textarea";
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
-import { Plus, Activity, Heart, Shield, ChevronRight, Hash, Database } from "lucide-react";
+import { useEffect, useState } from 'react';
+import { 
+    Plus, Activity, Heart, Shield, ChevronRight, 
+    Hash, Database, TrendingUp, BarChart3, 
+    AlertCircle, Clock, CheckCircle2, Droplets,
+    ArrowUpRight, Users, PieChart as PieChartIcon
+} from "lucide-react";
 import { toast } from 'sonner';
+import { motion, AnimatePresence } from "framer-motion";
+import axios from "axios";
+import { BloodTypeDistribution } from "@/Components/Charts";
 
 export default function ClientMainDashboard({ auth, hospitalStats, recentRequests, bloodInventory }) {
     const [isOpen, setIsOpen] = useState(false);
 
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors, reset } = useForm({
         blood_type: '',
-        units_required: '',
+        units_required: 1,
         urgency_level: 'medium',
-        reason: 'Emergency blood request from hospital dashboard',
+        patient_name: '',
+        contact_person: auth.user.name,
+        contact_phone: auth.user.phone || '',
+        reason: '',
     });
+
+    const [liveHospitalStats, setLiveHospitalStats] = useState(hospitalStats);
+    const [liveInventory, setLiveInventory] = useState(bloodInventory);
 
     const bloodTypes = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
     const submitRequest = (e) => {
         e.preventDefault();
-        console.log('Submitting request with data:', data);
         post(route('requests.store'), {
-            onSuccess: (page) => {
-                console.log('Request created successfully:', page);
+            onSuccess: () => {
                 setIsOpen(false);
-                setData({
-                    blood_type: '',
-                    units_required: '',
-                    urgency_level: 'medium',
-                    reason: 'Emergency blood request from hospital dashboard',
-                });
-                toast.success('Blood request created successfully!');
-                // Force page reload to show new request
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
+                reset();
             },
             onError: (errors) => {
-                console.error('Request creation failed:', errors);
-                toast.error('Failed to create request: ' + Object.values(errors).join(', '));
+                const firstError = Object.values(errors)[0];
+                toast.error(firstError || 'Failed to create request. Please check the form.');
             }
         });
     };
 
-    const openRequestModal = (bloodType = '') => {
-        setData('blood_type', bloodType);
-        setIsOpen(true);
+    useEffect(() => {
+        axios.get('/api/hospital-stats')
+            .then(response => setLiveHospitalStats(response.data))
+            .catch(() => {});
+
+        axios.get('/api/hospital-inventory')
+            .then(response => setLiveInventory(response.data))
+            .catch(() => {});
+    }, []);
+
+    const container = {
+        hidden: { opacity: 0 },
+        show: {
+            opacity: 1,
+            transition: { staggerChildren: 0.1 }
+        }
+    };
+
+    const item = {
+        hidden: { opacity: 0, y: 20 },
+        show: { opacity: 1, y: 0 }
     };
 
     return (
         <AuthenticatedLayout
             header={
-                <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest mb-1">
-                        Infrastructure <ChevronRight size={10} /> Hospital Node
-                    </div>
-                    <div className="flex justify-between items-end">
-                        <h2 className="text-3xl font-black text-gray-900 tracking-tight">Hospital Dashboard</h2>
-                        <div className="flex gap-2">
-                            <Link href={route('requests.index')}>
-                                <Button
-                                    variant="outline"
-                                    className="rounded-none border-gray-300 text-gray-700 hover:bg-gray-100 font-black uppercase tracking-widest text-[10px] h-10 px-6"
-                                >
-                                    View All Requests
-                                </Button>
-                            </Link>
-                            <Button
-                                variant="outline"
-                                className="rounded-none border-gray-900 bg-gray-900 text-white hover:bg-gray-800 hover:text-white font-black uppercase tracking-widest text-[10px] h-10 px-6"
-                                onClick={() => openRequestModal()}
-                            >
-                                <Plus size={14} className="mr-2" /> Create Request
-                            </Button>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                    <div>
+                        <div className="flex items-center gap-2 text-xs font-bold text-red-600 uppercase tracking-widest mb-2 bg-red-50 w-fit px-3 py-1 rounded-full">
+                            <Activity size={14} /> Hospital Node
                         </div>
+                        <h2 className="text-4xl font-extrabold text-gray-900 tracking-tight">
+                            {auth.user.hospital_name || 'Hospital Dashboard'}
+                        </h2>
+                        <p className="text-gray-500 mt-2 font-medium">Monitoring blood supply and urgent requests across the network.</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <Button
+                            onClick={() => setIsOpen(true)}
+                            className="bg-red-600 hover:bg-red-700 text-white rounded-full px-6 h-12 font-bold shadow-lg shadow-red-200 transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
+                        >
+                            <Plus size={20} /> Create Urgent Request
+                        </Button>
                     </div>
                 </div>
             }
         >
             <Head title="Hospital Dashboard" />
 
-            <div className="space-y-8">
-                {/* Infrastructure Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <Card className="border-border bg-white shadow-none">
-                        <CardContent className="py-6">
-                            <div className="flex justify-between items-start mb-4">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-xs">Total Requests</p>
-                                <Hash size={14} className="text-indigo-500" />
-                            </div>
-                            <p className="text-4xl font-black text-gray-900 tracking-tighter">{hospitalStats?.totalRequests || 0}</p>
-                            <div className="mt-4 flex items-center gap-1.5 text-xs text-green-600 font-bold">
-                                <span className="h-1 w-1 bg-green-500 rounded-none" />
-                                Synchronized
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card className="border-border bg-white shadow-none">
-                        <CardContent className="py-6">
-                            <div className="flex justify-between items-start mb-4">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-xs">Pending</p>
-                                <Activity size={14} className="text-indigo-500" />
-                            </div>
-                            <p className="text-4xl font-black text-indigo-600 tracking-tighter">{hospitalStats?.pendingRequests || 0}</p>
-                            <div className="mt-4 flex items-center gap-1.5 text-xs text-indigo-600 font-bold">
-                                <span className="h-1 w-1 bg-indigo-500 rounded-none" />
-                                Live Traffic
-                            </div>
-                        </CardContent>
-                    </Card>
-                    <Card className="border-border bg-white shadow-none">
-                        <CardContent className="py-6">
-                            <div className="flex justify-between items-start mb-4">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-xs">Units Requested</p>
-                                <Database size={14} className="text-indigo-500" />
-                            </div>
-                            <p className="text-4xl font-black text-gray-900 tracking-tighter">{hospitalStats?.totalUnitsRequested || 0}</p>
-                            <div className="mt-4 flex items-center gap-1.5 text-xs text-green-600 font-bold">
-                                <span className="h-1 w-1 bg-green-500 rounded-none" />
-                                Active
-                            </div>
-                        </CardContent>
-                    </Card>
+            <motion.div 
+                variants={container}
+                initial="hidden"
+                animate="show"
+                className="space-y-10"
+            >
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    {[
+                        { label: 'Total Requests', value: liveHospitalStats.totalRequests, icon: Hash, color: 'blue' },
+                        { label: 'Pending', value: liveHospitalStats.pendingRequests, icon: Clock, color: 'orange' },
+                        { label: 'Fulfilled', value: liveHospitalStats.fulfilledRequests, icon: CheckCircle2, color: 'green' },
+                        { label: 'Units Requested', value: liveHospitalStats.totalUnitsRequested, icon: Droplets, color: 'red' },
+                    ].map((stat, i) => (
+                        <motion.div key={i} variants={item}>
+                            <Card className="border-none bg-white shadow-xl shadow-gray-100/50 rounded-[2rem] overflow-hidden group hover:shadow-2xl transition-all duration-500">
+                                <CardContent className="p-8">
+                                    <div className={cn(
+                                        "h-12 w-12 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform",
+                                        stat.color === 'blue' && "bg-blue-50 text-blue-600",
+                                        stat.color === 'orange' && "bg-orange-50 text-orange-600",
+                                        stat.color === 'green' && "bg-green-50 text-green-600",
+                                        stat.color === 'red' && "bg-red-50 text-red-600",
+                                    )}>
+                                        <stat.icon size={24} />
+                                    </div>
+                                    <p className="text-gray-500 font-medium uppercase tracking-wider text-xs">{stat.label}</p>
+                                    <h3 className="text-3xl font-black text-gray-900 mt-1">{stat.value}</h3>
+                                </CardContent>
+                            </Card>
+                        </motion.div>
+                    ))}
                 </div>
 
-                {/* Modules */}
-                <Tabs defaultValue="inventory" className="w-full">
-                    <TabsList className="bg-white border border-border p-1 w-full justify-start rounded-none">
-                        <TabsTrigger value="inventory" className="rounded-none py-2.5 px-6 text-xs font-black uppercase tracking-widest transition-all border-b-2 border-transparent data-[state=active]:border-indigo-600 data-[state=active]:bg-gray-50">Inventory</TabsTrigger>
-                        <TabsTrigger value="requests" className="rounded-none py-2.5 px-6 text-xs font-black uppercase tracking-widest transition-all border-b-2 border-transparent data-[state=active]:border-indigo-600 data-[state=active]:bg-gray-50">Request Log</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="inventory" className="mt-6">
-                        <Card className="border-border bg-white shadow-none overflow-hidden">
-                            <Table>
-                                <TableHeader className="bg-gray-50/50">
-                                    <TableRow className="border-b border-border">
-                                        <TableHead className="font-black text-[10px] uppercase tracking-widest h-12 px-6">BIOLOGICAL GROUP</TableHead>
-                                        <TableHead className="font-black text-[10px] uppercase tracking-widest h-12 text-center">QUANTITY (UNITS)</TableHead>
-                                        <TableHead className="text-right font-black text-[10px] uppercase tracking-widest h-12 pr-6">SYSTEM ACTION</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {bloodInventory?.map((item) => (
-                                        <TableRow key={item.blood_type} className="border-b border-border hover:bg-gray-50 transition-colors">
-                                            <TableCell className="font-black text-indigo-600 text-2xl tracking-tighter px-6 py-4">{item.blood_type}</TableCell>
-                                            <TableCell className="text-center">
-                                                <span className="font-bold text-gray-900 text-lg">{item.available}</span>
-                                                {item.reserved > 0 && (
-                                                    <span className="text-xs text-gray-500 ml-2">({item.reserved} reserved)</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="text-right pr-6">
-                                                <Button
-                                                    variant="outline"
-                                                    className="rounded-none font-bold text-[10px] uppercase tracking-widest h-8 px-4 border-gray-200 text-gray-600 hover:border-gray-900 hover:text-gray-900"
-                                                    onClick={() => openRequestModal(item.blood_type)}
-                                                >
-                                                    Request Blood
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </Card>
-                    </TabsContent>
-
-                    <TabsContent value="requests" className="mt-6 space-y-4">
-                        {recentRequests?.map((req) => (
-                            <Card key={req.id} className="border-border bg-white shadow-none px-6 py-4">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex items-center gap-6 flex-1">
-                                        <div className="h-10 w-10 border border-border bg-gray-50 flex items-center justify-center text-gray-900 font-black">
-                                            {req.blood_type}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+                    <motion.div variants={item} className="lg:col-span-8 space-y-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between px-2 gap-4">
+                            <h3 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
+                                <Database className="text-red-600" /> Live Inventory Status
+                            </h3>
+                            <Link href={route('inventory')} className="text-red-600 font-bold text-sm hover:underline">
+                                Manage Supply
+                            </Link>
+                        </div>
+                        
+                        <div className="flex flex-col gap-6">
+                            <Card className="border-none bg-white shadow-xl shadow-gray-100/50 rounded-[2.5rem] p-6 sm:p-10">
+                                <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-8 flex items-center gap-2">
+                                    <PieChartIcon size={14} /> Global Stock Distribution
+                                </h4>
+                                <div className="h-[250px] sm:h-[300px] w-full">
+                                    {liveInventory && liveInventory.length > 0 ? (
+                                        <BloodTypeDistribution 
+                                            data={liveInventory.map(item => ({ name: item.blood_type, value: item.available }))} 
+                                        />
+                                    ) : (
+                                        <div className="h-full flex items-center justify-center text-gray-400 font-medium">
+                                            No inventory data available
                                         </div>
-                                        <div className="flex-1">
-                                            <p className="font-bold text-gray-900">Blood Request #{req.id}</p>
-                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                                                {req.units_required} units <span className="mx-2 text-gray-200">|</span> {new Date(req.created_at).toLocaleDateString()} <span className="mx-2 text-gray-200">|</span> {req.urgency_level}
-                                            </p>
-                                            
-                                            {/* Donor Registration Information */}
-                                            {req.donor_registration ? (
-                                                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
-                                                    <p className="text-xs font-black text-blue-800 uppercase tracking-widest mb-2">Donor Registration</p>
-                                                    <div className="flex items-center gap-4 text-sm">
-                                                        <div>
-                                                            <span className="font-medium text-blue-900">{req.donor_registration.donor_name}</span>
-                                                            <span className="text-blue-700 ml-2">({req.donor_registration.donor_blood_type})</span>
-                                                        </div>
-                                                        <div className="text-blue-700">
-                                                            Session: {req.donor_registration.donation_session}
-                                                        </div>
-                                                        <Badge
-                                                            variant="outline"
-                                                            className={cn(
-                                                                "rounded-none px-2 py-1 font-black text-[9px] uppercase tracking-widest",
-                                                                req.donor_registration.donation_status === 'completed' ? 'bg-green-50 text-green-700 border-green-100' :
-                                                                req.donor_registration.donation_status === 'scheduled' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                                                                req.donor_registration.donation_status === 'accepted' ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
-                                                                'bg-gray-50 text-gray-700 border-gray-100'
-                                                            )}
-                                                        >
-                                                            {req.donor_registration.donation_status}
-                                                        </Badge>
-                                                    </div>
-                                                    <p className="text-xs text-blue-600 mt-1">
-                                                        Registered: {new Date(req.donor_registration.registration_date).toLocaleDateString()}
-                                                    </p>
-                                                </div>
-                                            ) : (
-                                                <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded">
-                                                    <p className="text-xs font-black text-gray-600 uppercase tracking-widest">No Donor Registration</p>
-                                                    <p className="text-sm text-gray-500 mt-1">Waiting for donor to register for this request.</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col items-end gap-2">
-                                        <Badge
-                                            variant="outline"
-                                            className={cn(
-                                                "rounded-none px-3 py-1 font-black text-[10px] uppercase tracking-widest",
-                                                req.status === 'fulfilled' ? 'bg-green-50 text-green-700 border-green-100' : 
-                                                req.status === 'pending' ? 'bg-yellow-50 text-yellow-700 border-yellow-100' :
-                                                'bg-blue-50 text-blue-700 border-blue-100'
-                                            )}
-                                        >
-                                            {req.status}
-                                        </Badge>
-                                    </div>
+                                    )}
                                 </div>
                             </Card>
-                        ))}
-                    </TabsContent>
-                </Tabs>
-            </div>
 
-            {/* Request Modal */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                {(liveInventory && liveInventory.length > 0 ? liveInventory : bloodInventory).slice(0, 8).map((item, i) => (
+                                    <Card key={i} className="border-none bg-white shadow-md rounded-[2rem] p-4 sm:p-6 hover:shadow-lg transition-all group border border-transparent hover:border-red-100">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <span className={cn(
+                                                "h-10 w-10 sm:h-12 sm:w-12 rounded-xl sm:rounded-2xl flex items-center justify-center font-black text-sm sm:text-base transition-colors",
+                                                item.status === 'critical' ? "bg-red-50 text-red-600" : 
+                                                item.status === 'low' ? "bg-orange-50 text-orange-600" : "bg-green-50 text-green-600"
+                                            )}>
+                                                {item.blood_type}
+                                            </span>
+                                            <Badge className={cn(
+                                                "rounded-full px-2 py-0 text-[8px] sm:text-[10px] font-bold uppercase border-none",
+                                                item.status === 'critical' ? "bg-red-100 text-red-600" : 
+                                                item.status === 'low' ? "bg-orange-100 text-orange-600" : "bg-green-100 text-green-600"
+                                            )}>
+                                                {item.status}
+                                            </Badge>
+                                        </div>
+                                        <p className="text-2xl sm:text-3xl font-black text-gray-900 group-hover:text-red-600 transition-colors">
+                                            {item.available} <span className="text-[8px] sm:text-[10px] text-gray-400 font-bold uppercase tracking-widest">units</span>
+                                        </p>
+                                    </Card>
+                                ))}
+                            </div>
+                        </div>
+                    </motion.div>
+
+                    <motion.div variants={item} className="lg:col-span-4 space-y-6 overflow-hidden">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between px-2 gap-4">
+                            <h3 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
+                                <Activity className="text-blue-600" /> Recent Requests
+                            </h3>
+                            <Link href={route('requests.available')} className="text-blue-600 font-bold text-sm hover:underline flex items-center gap-1">
+                                View History <ArrowUpRight size={16} />
+                            </Link>
+                        </div>
+
+                        <Card className="border-none bg-white shadow-xl shadow-gray-100/50 rounded-[2rem] overflow-x-auto">
+                            <div className="min-w-[400px] lg:min-w-0">
+                                <Table>
+                                    <TableHeader className="bg-gray-50/50">
+                                        <TableRow className="hover:bg-transparent border-none">
+                                            <TableHead className="font-bold text-gray-500 uppercase text-[10px] tracking-widest p-4 sm:p-6">Blood Type</TableHead>
+                                            <TableHead className="font-bold text-gray-500 uppercase text-[10px] tracking-widest p-4 sm:p-6">Urgency</TableHead>
+                                            <TableHead className="font-bold text-gray-500 uppercase text-[10px] tracking-widest p-4 sm:p-6">Status</TableHead>
+                                            <TableHead className="font-bold text-gray-500 uppercase text-[10px] tracking-widest p-4 sm:p-6 text-right">Action</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {recentRequests.map((request) => (
+                                            <TableRow key={request.id} className="border-gray-50 hover:bg-gray-50/50 transition-colors">
+                                                <TableCell className="p-4 sm:p-6">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-8 w-8 sm:h-10 sm:w-10 bg-red-50 text-red-600 rounded-lg sm:rounded-xl flex items-center justify-center font-black text-xs sm:text-base">
+                                                            {request.blood_type}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-gray-900 text-xs sm:text-sm">{request.units_required} Units</p>
+                                                            <p className="text-[10px] sm:text-xs text-gray-400">{new Date(request.created_at).toLocaleDateString()}</p>
+                                                        </div>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="p-4 sm:p-6">
+                                                    <Badge className={cn(
+                                                        "rounded-full px-2 sm:px-3 py-0.5 sm:py-1 text-[8px] sm:text-[10px] font-bold uppercase border-none",
+                                                        request.urgency_level === 'critical' ? "bg-red-100 text-red-700 shadow-sm shadow-red-50" : 
+                                                        request.urgency_level === 'high' ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"
+                                                    )}>
+                                                        {request.urgency_level}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="p-4 sm:p-6">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={cn(
+                                                            "h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full",
+                                                            request.status === 'pending' ? "bg-orange-400 animate-pulse" : "bg-green-500"
+                                                        )} />
+                                                        <span className="text-[10px] sm:text-sm font-bold text-gray-700 uppercase tracking-tighter">{request.status}</span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="p-4 sm:p-6 text-right">
+                                                    <Button variant="ghost" size="sm" className="rounded-full font-bold text-red-600 hover:bg-red-50 text-[10px] sm:text-xs h-8 px-2 sm:px-4">
+                                                        Manage
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </Card>
+                    </motion.div>
+                </div>
+            </motion.div>
+
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                <DialogContent className="max-w-md border-border bg-white rounded-none p-8">
-                    <form onSubmit={submitRequest}>
-                        <DialogHeader className="mb-6">
-                            <DialogTitle className="text-2xl font-black tracking-tight flex items-center gap-2">
-                                Create Blood Request
-                            </DialogTitle>
-                            <DialogDescription className="text-gray-500 font-medium">Request blood units for patients in need.</DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-6">
+                <DialogContent className="sm:max-w-[500px] rounded-[2.5rem] border-none shadow-2xl p-0 overflow-hidden">
+                    <div className="bg-red-600 p-8 text-white relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4 opacity-10">
+                            <Droplets size={120} />
+                        </div>
+                        <DialogTitle className="text-3xl font-black tracking-tight">Broadcast Request</DialogTitle>
+                        <DialogDescription className="text-red-100 mt-2 font-medium">
+                            Alert local donors about an urgent need for blood.
+                        </DialogDescription>
+                    </div>
+                    
+                    <form onSubmit={submitRequest} className="p-8 space-y-6">
+                        <div className="grid grid-cols-2 gap-6">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Blood Type</label>
-                                <Select 
-                                    value={data.blood_type} 
-                                    onValueChange={(val) => setData('blood_type', val)}
-                                >
-                                    <SelectTrigger className={`h-10 border-border bg-gray-50/50 rounded-none ${errors.blood_type ? 'border-red-500' : ''}`}>
-                                        <SelectValue placeholder="Select blood type..." />
+                                <Label className="text-xs font-bold uppercase tracking-wider text-gray-400">Blood Type</Label>
+                                <Select value={data.blood_type} onValueChange={(val) => setData('blood_type', val)}>
+                                    <SelectTrigger className="rounded-2xl border-gray-100 bg-gray-50 h-12 font-bold focus:ring-red-500">
+                                        <SelectValue placeholder="Select" />
                                     </SelectTrigger>
-                                    <SelectContent className="rounded-none border-border">
-                                        {bloodTypes.map((type) => (
-                                            <SelectItem key={type} value={type} className="rounded-none">{type}</SelectItem>
+                                    <SelectContent className="rounded-2xl border-gray-100 shadow-xl">
+                                        {bloodTypes.map(type => (
+                                            <SelectItem key={type} value={type} className="rounded-xl focus:bg-red-50 focus:text-red-600 font-bold">{type}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                {errors.blood_type && <p className="text-red-500 text-[10px] font-black uppercase tracking-widest mt-1">{errors.blood_type}</p>}
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Units Required</label>
+                                <Label className="text-xs font-bold uppercase tracking-wider text-gray-400">Units Required</Label>
                                 <Input 
                                     type="number" 
                                     min="1" 
-                                    placeholder="Enter units..." 
+                                    max="20"
                                     value={data.units_required}
-                                    onChange={(e) => setData('units_required', e.target.value)}
-                                    className={`h-10 border-border bg-gray-50/50 rounded-none ${errors.units_required ? 'border-red-500' : ''}`}
+                                    onChange={e => setData('units_required', e.target.value)}
+                                    className="h-12 bg-gray-50/50 border-none rounded-2xl font-bold focus:ring-red-500"
                                 />
-                                {errors.units_required && <p className="text-red-500 text-[10px] font-black uppercase tracking-widest mt-1">{errors.units_required}</p>}
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Urgency Level</label>
-                                <Select 
-                                    value={data.urgency_level} 
-                                    onValueChange={(val) => setData('urgency_level', val)}
-                                >
-                                    <SelectTrigger className="h-10 border-border bg-gray-50/50 rounded-none">
-                                        <SelectValue placeholder="Select urgency..." />
-                                    </SelectTrigger>
-                                    <SelectContent className="rounded-none border-border">
-                                        <SelectItem value="critical" className="rounded-none">Critical</SelectItem>
-                                        <SelectItem value="high" className="rounded-none">High</SelectItem>
-                                        <SelectItem value="medium" className="rounded-none">Medium</SelectItem>
-                                        <SelectItem value="low" className="rounded-none">Low</SelectItem>
-                                    </SelectContent>
-                                </Select>
                             </div>
                         </div>
-                        <DialogFooter className="mt-8 flex gap-3">
+
+                        <div className="space-y-2">
+                            <Label className="text-xs font-bold uppercase tracking-wider text-gray-400">Urgency Level</Label>
+                            <div className="grid grid-cols-4 gap-2">
+                                {['low', 'medium', 'high', 'critical'].map(level => (
+                                    <button
+                                        key={level}
+                                        type="button"
+                                        onClick={() => setData('urgency_level', level)}
+                                        className={cn(
+                                            "py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all",
+                                            data.urgency_level === level 
+                                                ? "bg-red-600 border-red-600 text-white shadow-md shadow-red-200 scale-105" 
+                                                : "bg-white border-gray-100 text-gray-400 hover:border-gray-200"
+                                        )}
+                                    >
+                                        {level}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label className="text-xs font-bold uppercase tracking-wider text-gray-400">Patient Name (Optional)</Label>
+                            <Input 
+                                placeholder="Emergency Case #..."
+                                value={data.patient_name}
+                                onChange={e => setData('patient_name', e.target.value)}
+                                className="rounded-2xl border-gray-100 bg-gray-50 h-12 font-bold focus:ring-red-500"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label className="text-xs font-bold uppercase tracking-wider text-gray-400">Reason / Clinical Notes</Label>
+                            <Textarea 
+                                placeholder="Describe the medical emergency..."
+                                value={data.reason}
+                                onChange={e => setData('reason', e.target.value)}
+                                className="rounded-2xl border-gray-100 bg-gray-50 min-h-[100px] font-medium focus:ring-red-500"
+                            />
+                        </div>
+
+                        <div className="flex gap-3 pt-4">
                             <Button 
                                 type="button" 
                                 variant="ghost" 
-                                className="h-10 px-6 font-bold text-gray-500 rounded-none" 
                                 onClick={() => setIsOpen(false)}
+                                className="flex-1 rounded-full h-12 font-bold text-gray-500 hover:bg-gray-50"
                             >
                                 Cancel
                             </Button>
                             <Button 
-                                type="submit"
-                                disabled={processing}
-                                className="h-10 px-8 bg-indigo-600 text-white font-black uppercase tracking-widest text-[10px] rounded-none hover:bg-indigo-700 flex-1 shadow-none"
+                                type="submit" 
+                                disabled={processing || !data.blood_type}
+                                className="flex-1 rounded-full h-12 font-black bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-200"
                             >
-                                {processing ? "Creating..." : "Create Request"}
+                                {processing ? 'Broadcasting...' : 'Broadcast Request'}
                             </Button>
-                        </DialogFooter>
+                        </div>
                     </form>
                 </DialogContent>
             </Dialog>

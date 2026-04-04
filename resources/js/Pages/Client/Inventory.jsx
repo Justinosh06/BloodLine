@@ -6,8 +6,12 @@ import { Head } from '@inertiajs/react';
 import { Activity, Thermometer, Box, AlertTriangle, ChevronRight, Hash, Database } from "lucide-react";
 
 export default function Inventory({ auth, bloodStocks, hospitalCapacity }) {
-    const totalUnits = bloodStocks.reduce((sum, item) => sum + item.available_units, 0);
-    const totalCapacity = hospitalCapacity;
+    const totalUnits = bloodStocks.reduce(
+        (sum, item) => sum + (Number(item.available_units) || 0),
+        0
+    );
+    const totalCapacity = Number(hospitalCapacity) || 0;
+    const efficiency = totalCapacity > 0 ? Math.round((totalUnits / totalCapacity) * 100) : 0;
 
     return (
         <AuthenticatedLayout
@@ -60,7 +64,7 @@ export default function Inventory({ auth, bloodStocks, hospitalCapacity }) {
                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-xs">Array Efficiency</p>
                                 <Activity size={14} className="text-indigo-500" />
                             </div>
-                            <p className="text-4xl font-black text-gray-900 tracking-tighter">{Math.round((totalUnits / totalCapacity) * 100)}%</p>
+                            <p className="text-4xl font-black text-gray-900 tracking-tighter">{efficiency}%</p>
                             <div className="mt-4 flex items-center gap-1.5 text-xs text-green-600 font-bold">
                                 <span className="h-1 w-1 bg-green-500 rounded-none" />
                                 Load Optimized

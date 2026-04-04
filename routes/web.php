@@ -37,7 +37,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/requests/available', [ClientController::class, 'availableRequests'])->name('requests.available');
     Route::get('/inventory', [ClientController::class, 'inventory'])->name('inventory');
     Route::get('/calendar', [ClientController::class, 'calendar'])->name('calendar');
-    Route::post('/donations', [ClientController::class, 'storeDonation'])->name('donations.store');
     Route::post('/donations/register', [ClientController::class, 'registerDonation'])->name('donations.register');
     Route::post('/donations/accept', [ClientController::class, 'acceptRejectDonation'])->name('donations.accept');
     Route::post('/donations/update-status', [ClientController::class, 'updateDonationStatus'])->name('donations.update-status');
@@ -49,6 +48,8 @@ Route::middleware('auth')->group(function () {
             Route::get('/dashboard', [AdminController::class, 'index'])->name('admin.dashboard');
             Route::get('/global-requests', [AdminController::class, 'globalRequests'])->name('admin.global-requests');
             Route::get('/inventory', [AdminController::class, 'inventory'])->name('admin.inventory');
+            Route::get('/users', [AdminController::class, 'users'])->name('admin.users');
+            Route::patch('/users/{user}/role', [AdminController::class, 'updateUserRole'])->name('admin.users.role');
         });
 
     // Profile Management

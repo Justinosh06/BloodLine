@@ -1,13 +1,18 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
 import { Button } from "@/Components/ui/button";
 import { Badge } from "@/Components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/Components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/Components/ui/avatar";
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
-import { Calendar as CalendarIcon, Clock, Users, CheckCircle, AlertCircle, ChevronRight } from "lucide-react";
+import { useState } from 'react';
+import { Calendar as CalendarIcon, Clock, Users, CheckCircle, AlertCircle, ChevronRight, Droplets, MapPin, Phone, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export default function Calendar({ calendar, currentMonth, stats }) {
+export default function Calendar({ donations = [], calendar, currentMonth, stats }) {
     const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const [selectedDonation, setSelectedDonation] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     const getStatusColor = (status) => {
         switch (status) {
@@ -50,6 +55,30 @@ export default function Calendar({ calendar, currentMonth, stats }) {
         }
     };
 
+    const safeStats = stats || {
+        totalDonations: donations.length,
+        completedDonations: donations.filter((d) => d.status === "completed").length,
+        scheduledDonations: donations.filter((d) => d.status === "scheduled").length,
+        pendingDonations: donations.filter((d) =>
+            ["pending", "accepted", "in_progress"].includes(d.status)
+        ).length,
+    };
+
+    const monthLabel =
+        currentMonth ||
+        new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+    const days = Array.isArray(calendar) ? calendar : [];
+
+    const handleDonationClick = (donation) => {
+        // Find full donation details from the donations array
+        const fullDonation = donations.find(d => d.id === donation.id);
+        if (fullDonation) {
+            setSelectedDonation(fullDonation);
+            setIsModalOpen(true);
+        }
+    };
+
     return (
         <AuthenticatedLayout
             header={
@@ -71,7 +100,7 @@ export default function Calendar({ calendar, currentMonth, stats }) {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Donations</p>
-                                    <p className="text-3xl font-black text-gray-900 tracking-tighter">{stats.totalDonations}</p>
+                                    <p className="text-3xl font-black text-gray-900 tracking-tighter">{safeStats.totalDonations}</p>
                                 </div>
                                 <Users className="h-8 w-8 text-indigo-500" />
                             </div>
@@ -82,7 +111,7 @@ export default function Calendar({ calendar, currentMonth, stats }) {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Completed</p>
-                                    <p className="text-3xl font-black text-green-600 tracking-tighter">{stats.completedDonations}</p>
+                                    <p className="text-3xl font-black text-green-600 tracking-tighter">{safeStats.completedDonations}</p>
                                 </div>
                                 <CheckCircle className="h-8 w-8 text-green-500" />
                             </div>
@@ -93,7 +122,7 @@ export default function Calendar({ calendar, currentMonth, stats }) {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Scheduled</p>
-                                    <p className="text-3xl font-black text-blue-600 tracking-tighter">{stats.scheduledDonations}</p>
+                                    <p className="text-3xl font-black text-blue-600 tracking-tighter">{safeStats.scheduledDonations}</p>
                                 </div>
                                 <Clock className="h-8 w-8 text-blue-500" />
                             </div>
@@ -104,7 +133,7 @@ export default function Calendar({ calendar, currentMonth, stats }) {
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Pending</p>
-                                    <p className="text-3xl font-black text-yellow-600 tracking-tighter">{stats.pendingDonations}</p>
+                                    <p className="text-3xl font-black text-yellow-600 tracking-tighter">{safeStats.pendingDonations}</p>
                                 </div>
                                 <AlertCircle className="h-8 w-8 text-yellow-500" />
                             </div>
@@ -117,7 +146,7 @@ export default function Calendar({ calendar, currentMonth, stats }) {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <CalendarIcon className="h-5 w-5" />
-                            {currentMonth}
+                            {monthLabel}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -132,7 +161,7 @@ export default function Calendar({ calendar, currentMonth, stats }) {
 
                         {/* Calendar days */}
                         <div className="grid grid-cols-7 gap-1">
-                            {calendar.map((day, index) => (
+                            {days.map((day) => (
                                 <div
                                     key={day.date}
                                     className={cn(
@@ -164,7 +193,8 @@ export default function Calendar({ calendar, currentMonth, stats }) {
                                         {day.donations.slice(0, 2).map((donation) => (
                                             <div
                                                 key={donation.id}
-                                                className="text-xs p-1 rounded border cursor-pointer hover:shadow-sm transition-shadow"
+                                                onClick={() => handleDonationClick(donation)}
+                                                className="text-xs p-1 rounded border cursor-pointer hover:shadow-sm transition-shadow hover:scale-105"
                                                 style={{
                                                     backgroundColor: getStatusColor(donation.status).replace('text-', 'bg-').replace(' border-', '/'),
                                                     borderColor: getStatusColor(donation.status).split(' ')[2],
@@ -216,6 +246,116 @@ export default function Calendar({ calendar, currentMonth, stats }) {
                         </div>
                     </CardContent>
                 </Card>
+
+                {/* Donation Detail Modal */}
+                <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                    <DialogContent className="max-w-md rounded-[2rem] border-none shadow-2xl p-0 overflow-hidden">
+                        {selectedDonation && (
+                            <>
+                                <div className={cn(
+                                    "p-8 text-white relative overflow-hidden",
+                                    selectedDonation.status === 'completed' ? "bg-green-600" :
+                                    selectedDonation.status === 'scheduled' ? "bg-blue-600" :
+                                    selectedDonation.status === 'in_progress' ? "bg-purple-600" :
+                                    "bg-yellow-600"
+                                )}>
+                                    <div className="absolute top-0 right-0 p-4 opacity-10">
+                                        <Droplets size={120} />
+                                    </div>
+                                    <DialogTitle className="text-2xl font-black tracking-tight flex items-center gap-3 relative z-10">
+                                        <Droplets className="fill-current" /> Donation Details
+                                    </DialogTitle>
+                                    <DialogDescription className="text-white/80 mt-2 font-medium relative z-10">
+                                        {selectedDonation.status === 'completed' ? 'Completed Donation' :
+                                         selectedDonation.status === 'scheduled' ? 'Scheduled Donation' :
+                                         selectedDonation.status === 'in_progress' ? 'Donation In Progress' :
+                                         'Pending Donation'}
+                                    </DialogDescription>
+                                </div>
+
+                                <div className="p-8 space-y-6">
+                                    {/* Donor Info */}
+                                    <div className="flex items-center gap-4">
+                                        <Avatar className="h-16 w-16 rounded-2xl border-2 border-gray-100">
+                                            <AvatarImage src={`https://avatar.vercel.sh/${selectedDonation.donor?.name}.png`} />
+                                            <AvatarFallback className="bg-gray-100 text-gray-600 font-bold text-xl">
+                                                {selectedDonation.donor?.name?.charAt(0)}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div>
+                                            <h4 className="text-lg font-bold text-gray-900">{selectedDonation.donor?.name}</h4>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <Badge className="rounded-full px-3 py-1 text-xs font-bold border-none bg-red-100 text-red-600">
+                                                    {selectedDonation.donor?.blood_type}
+                                                </Badge>
+                                                <span className="text-xs text-gray-500">{selectedDonation.donor?.phone}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Details Grid */}
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                                            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                                <CalendarIcon size={14} /> Date
+                                            </span>
+                                            <span className="text-sm font-bold text-gray-900">
+                                                {selectedDonation.donation_date ? new Date(selectedDonation.donation_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Not set'}
+                                            </span>
+                                        </div>
+
+                                        <div className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                                            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                                <Clock size={14} /> Session
+                                            </span>
+                                            <span className="text-sm font-bold text-gray-900">
+                                                {getSessionTime(selectedDonation.donation_session)}
+                                            </span>
+                                        </div>
+
+                                        <div className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                                            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                                <Droplets size={14} /> Units
+                                            </span>
+                                            <span className="text-sm font-bold text-gray-900">
+                                                {selectedDonation.units_donated || 1} Unit(s)
+                                            </span>
+                                        </div>
+
+                                        <div className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                                            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                                <MapPin size={14} /> Request ID
+                                            </span>
+                                            <span className="text-sm font-bold text-gray-900">
+                                                #{selectedDonation.blood_request_id}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Status Badge */}
+                                    <div className="flex justify-center">
+                                        <Badge className={cn(
+                                            "rounded-full px-6 py-2 text-sm font-black uppercase tracking-widest border-none",
+                                            selectedDonation.status === 'completed' ? "bg-green-100 text-green-700" :
+                                            selectedDonation.status === 'scheduled' ? "bg-blue-100 text-blue-700" :
+                                            selectedDonation.status === 'in_progress' ? "bg-purple-100 text-purple-700" :
+                                            "bg-yellow-100 text-yellow-700"
+                                        )}>
+                                            {selectedDonation.status?.replace('_', ' ')}
+                                        </Badge>
+                                    </div>
+
+                                    <Button 
+                                        onClick={() => setIsModalOpen(false)}
+                                        className="w-full h-12 rounded-full font-bold bg-gray-900 text-white hover:bg-gray-800"
+                                    >
+                                        Close
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </DialogContent>
+                </Dialog>
             </div>
         </AuthenticatedLayout>
     );

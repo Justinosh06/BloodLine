@@ -11,7 +11,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/Components/ui/dialog";
-import { AlertCircle, Trash2, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Trash2, ShieldAlert, X } from "lucide-react";
 
 export default function DeleteUserForm({ className = '' }) {
     const [open, setOpen] = useState(false);
@@ -41,70 +41,71 @@ export default function DeleteUserForm({ className = '' }) {
     };
 
     return (
-        <section className={`space-y-6 ${className}`}>
-            <header className="mb-8">
-                <div className="flex items-center gap-2 text-[10px] font-black text-red-600 uppercase tracking-widest mb-1">
-                    <AlertCircle size={10} /> Terminal Protocol
-                </div>
-                <h2 className="text-xl font-black text-gray-900 tracking-tight uppercase">Delete Account</h2>
-                <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mt-1">
-                    Deleting your account will permanently remove all your data and cannot be undone.
-                </p>
-            </header>
-
+        <section className={className}>
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
-                    <Button variant="outline" className="rounded-none border-red-200 text-red-600 hover:bg-red-50 font-black text-[10px] uppercase tracking-widest h-11 px-8 shadow-none">
-                        Delete Account
+                    <Button 
+                        variant="destructive" 
+                        className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-full px-10 h-12 shadow-lg shadow-red-100 transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
+                    >
+                        <Trash2 size={18} /> Delete Account
                     </Button>
                 </DialogTrigger>
-                <DialogContent className="rounded-none border-border shadow-2xl max-w-md bg-white p-0 overflow-hidden">
-                    <div className="h-1 w-full bg-red-600" />
+                <DialogContent className="rounded-[2.5rem] border-none shadow-2xl max-w-md bg-white p-0 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                     <div className="p-8">
-                        <DialogHeader className="mb-6">
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="h-8 w-8 bg-red-50 border border-red-100 flex items-center justify-center text-red-600">
-                                    <ShieldAlert size={16} />
-                                </div>
-                                <DialogTitle className="text-lg font-black text-gray-900 uppercase tracking-tight">CONFIRM_PURGE_SEQUENCE</DialogTitle>
+                        <div className="flex justify-between items-start mb-6">
+                            <div className="h-12 w-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-600">
+                                <AlertTriangle size={24} />
                             </div>
-                            <DialogDescription className="text-[11px] font-black text-gray-500 uppercase tracking-widest leading-relaxed">
-                                CRITICAL: All node resources, biological telemetry, and encrypted keys will be permanently purged. Authentication required to proceed.
+                            <button 
+                                onClick={() => setOpen(false)}
+                                className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <DialogHeader className="mb-8 text-left">
+                            <DialogTitle className="text-2xl font-bold text-gray-900 tracking-tight">Are you absolutely sure?</DialogTitle>
+                            <DialogDescription className="text-sm font-medium text-gray-500 mt-2 leading-relaxed">
+                                This action cannot be undone. All of your data, including donation history and medical records, will be permanently removed from our servers.
                             </DialogDescription>
                         </DialogHeader>
 
                         <form onSubmit={deleteUser} className="space-y-6">
-                            <Input
-                                id="password"
-                                type="password"
-                                name="password"
-                                ref={passwordInput}
-                                value={data.password}
-                                onChange={(e) => setData('password', e.target.value)}
-                                className="rounded-none border-border shadow-none h-11"
-                                placeholder="ENTER_SECURE_PHRASE"
-                                label="SECURITY_CHALLENGE"
-                                isInvalid={!!errors.password}
-                                errorMessage={errors.password}
-                            />
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-gray-700 ml-1">Confirm with Password</label>
+                                <Input
+                                    id="password"
+                                    type="password"
+                                    name="password"
+                                    ref={passwordInput}
+                                    value={data.password}
+                                    onChange={(e) => setData('password', e.target.value)}
+                                    className="h-12 bg-gray-50/50 border-none focus:bg-white rounded-2xl shadow-none text-sm font-bold transition-all"
+                                    placeholder="Enter your password to confirm"
+                                    isInvalid={!!errors.password}
+                                />
+                                {errors.password && <p className="text-xs text-red-600 font-medium ml-1">{errors.password}</p>}
+                            </div>
 
-                            <DialogFooter className="flex flex-row gap-4 pt-4">
+                            <div className="flex flex-col sm:flex-row gap-3 pt-4">
                                 <Button
                                     type="button"
-                                    variant="outline"
+                                    variant="ghost"
                                     onClick={() => setOpen(false)}
-                                    className="flex-1 rounded-none border-border font-black text-[10px] uppercase tracking-widest h-11 shadow-none"
+                                    className="flex-1 h-12 rounded-full font-bold text-gray-500 hover:bg-gray-100 transition-all"
                                 >
                                     Cancel
                                 </Button>
                                 <Button
                                     type="submit"
                                     disabled={processing}
-                                    className="flex-1 rounded-none bg-red-600 hover:bg-red-700 text-white font-black text-[10px] uppercase tracking-widest h-11 shadow-none flex items-center justify-center gap-2"
+                                    className="flex-1 h-12 rounded-full bg-red-600 hover:bg-red-700 text-white font-bold shadow-lg shadow-red-100 transition-all flex items-center justify-center gap-2"
                                 >
-                                    {processing ? "Deleting..." : "Delete Account"} <Trash2 size={12} />
+                                    {processing ? "Deleting..." : "Permanently Delete"}
                                 </Button>
-                            </DialogFooter>
+                            </div>
                         </form>
                     </div>
                 </DialogContent>
@@ -112,4 +113,3 @@ export default function DeleteUserForm({ className = '' }) {
         </section>
     );
 }
-

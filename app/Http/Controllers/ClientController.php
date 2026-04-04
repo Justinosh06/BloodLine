@@ -7,17 +7,30 @@ use App\Models\BloodRequest;
 use App\Models\BloodStock;
 use App\Models\Donation;
 use App\Models\User;
+use App\Services\BloodRequestService;
+use App\Services\DonationService;
+use App\Http\Requests\BloodRequestCreateRequest;
+use App\Http\Requests\DonationCreateRequest;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class ClientController extends Controller
 {
+    protected $bloodRequestService;
+    protected $donationService;
+
+    public function __construct(BloodRequestService $bloodRequestService, DonationService $donationService)
+    {
+        $this->bloodRequestService = $bloodRequestService;
+        $this->donationService = $donationService;
+    }
+
     public function index()
     {
         $user = Auth::user();
 
-        // Get system-wide stats for main dashboard
         $stats = [
             'activeRequests' => BloodRequest::where('status', 'pending')->count(),
             'totalDonors' => User::where('role', 'donor')->count(),
@@ -25,29 +38,32 @@ class ClientController extends Controller
         ];
 
         if ($user->isDonor()) {
-            return $this->donorDashboard();
+            return $this->donorDashboard($stats);
         } else {
-            return $this->hospitalDashboard();
+            return $this->hospitalDashboard($stats);
         }
     }
 
-    private function donorDashboard()
+    private function donorDashboard(array $stats)
     {
         $user = Auth::user();
         
-        // Get system-wide stats for main dashboard
-        $stats = [
-            'activeRequests' => BloodRequest::where('status', 'pending')->count(),
-            'totalDonors' => User::where('role', 'donor')->count(),
-            'livesSaved' => Donation::where('status', 'completed')->count(),
-        ];
+        $upcomingDonations = Donation::where('donor_id', $user->id)
+            ->whereIn('status', ['scheduled', 'in_progress'])
+            ->with('bloodRequest.user')
+            ->orderBy('donation_date', 'asc')
+            ->take(5)
+            ->get();
         
         $donorStats = [
             'totalDonations' => $user->total_donations,
             'lastDonation' => $user->last_donation_date,
-            'eligibilityDays' => $user->canDonate() ? 0 : max(0, 56 - $user->last_donation_date->diffInDays(now())),
+            'eligibilityDays' => $user->canDonate() ? 0 : max(0, 56 - ($user->last_donation_date ? $user->last_donation_date->diffInDays(now()) : 0)),
             'bloodType' => $user->blood_type,
             'isAvailable' => $user->canDonate(),
+            'hasUpcomingDonation' => $upcomingDonations->isNotEmpty(),
+            'upcomingDonationDate' => $upcomingDonations->first()?->donation_date,
+            'upcomingDonationDays' => $upcomingDonations->first()?->donation_date ? now()->diffInDays($upcomingDonations->first()->donation_date, false) : null,
         ];
 
         $urgentNeeds = BloodRequest::where('blood_type', $user->blood_type)
@@ -70,19 +86,13 @@ class ClientController extends Controller
             'donorStats' => $donorStats,
             'urgentNeeds' => $urgentNeeds,
             'donationHistory' => $donationHistory,
+            'upcomingDonations' => $upcomingDonations,
         ]);
     }
 
-    private function hospitalDashboard()
+    private function hospitalDashboard(array $stats)
     {
         $user = Auth::user();
-        
-        // Get system-wide stats for main dashboard
-        $stats = [
-            'activeRequests' => BloodRequest::where('status', 'pending')->count(),
-            'totalDonors' => User::where('role', 'donor')->count(),
-            'livesSaved' => Donation::where('status', 'completed')->count(),
-        ];
         
         $hospitalStats = [
             'totalRequests' => BloodRequest::where('user_id', $user->id)->count(),
@@ -91,32 +101,11 @@ class ClientController extends Controller
             'totalUnitsRequested' => BloodRequest::where('user_id', $user->id)->sum('units_required'),
         ];
 
-        // Get donor registrations for hospital's requests
         $recentRequests = BloodRequest::where('user_id', $user->id)
-            ->with(['donations' => function($query) {
-                $query->with('donor')->latest();
-            }])
+            ->with(['donations.donor'])
             ->latest()
             ->take(10)
-            ->get()
-            ->map(function ($request) {
-                $donation = $request->donations->first();
-                return [
-                    'id' => $request->id,
-                    'blood_type' => $request->blood_type,
-                    'units_required' => $request->units_required,
-                    'urgency_level' => $request->urgency_level,
-                    'status' => $request->status,
-                    'created_at' => $request->created_at,
-                    'donor_registration' => $donation ? [
-                        'donor_name' => $donation->donor->name,
-                        'donor_blood_type' => $donation->donor->blood_type,
-                        'donation_session' => $donation->donation_session,
-                        'donation_status' => $donation->status,
-                        'registration_date' => $donation->created_at,
-                    ] : null,
-                ];
-            });
+            ->get();
 
         $bloodInventory = BloodStock::where('hospital_id', $user->id)
             ->get()
@@ -142,261 +131,59 @@ class ClientController extends Controller
         return Inertia::render('Client/RequestBlood');
     }
 
-    public function storeRequest(Request $request)
+    public function storeRequest(BloodRequestCreateRequest $request)
     {
-        \Log::info('storeRequest called', $request->all());
-        
-        $validated = $request->validate([
-            'blood_type' => 'required|string',
-            'units_required' => 'required|integer|min:1|max:10',
-            'urgency_level' => 'required|in:low,medium,high,critical',
-            'reason' => 'required|string',
-        ]);
+        try {
+            $bloodRequest = $this->bloodRequestService->createRequest($request->validated());
+            
+            try {
+                broadcast(new BloodRequestCreated($bloodRequest))->toOthers();
+            } catch (\Exception $e) {
+                Log::warning('Broadcast failed but request was created', ['error' => $e->getMessage()]);
+            }
 
-        \Log::info('Validation passed', $validated);
-        
-        $user = Auth::user();
-        \Log::info('Creating request for user', ['user_id' => $user->id, 'name' => $user->name]);
-        
-        $bloodRequest = BloodRequest::create([
-            'user_id' => $user->id,
-            'blood_type' => $validated['blood_type'],
-            'units_required' => $validated['units_required'],
-            'urgency_level' => $validated['urgency_level'],
-            'patient_name' => 'Emergency Patient',
-            'hospital_name' => $user->hospital_name ?? 'General Hospital',
-            'hospital_address' => $user->address ?? 'Hospital Address',
-            'contact_person' => $user->name,
-            'contact_phone' => $user->phone ?? '000-000-0000',
-            'reason' => $validated['reason'],
-            'notes' => 'Emergency blood request',
-            'expires_at' => now()->addDays(7),
-        ]);
-
-        \Log::info('BloodRequest created', ['id' => $bloodRequest->id]);
-
-        // Broadcast the new blood request
-        broadcast(new BloodRequestCreated($bloodRequest))->toOthers();
-
-        return back()->with('success', 'Blood request created successfully!');
+            return back()->with('success', 'Blood request created successfully!');
+        } catch (\Exception $e) {
+            Log::error('Blood request creation failed', ['error' => $e->getMessage()]);
+            return back()->with('error', 'Failed to create blood request: ' . $e->getMessage());
+        }
     }
 
     public function availableRequests()
     {
         $user = Auth::user();
         
+        $query = BloodRequest::where('status', 'pending')
+            ->where('expires_at', '>', now())
+            ->with(['user', 'donations.donor'])
+            ->latest();
+
         if ($user->isDonor()) {
-            // Donor view - show ALL public requests (from all hospitals) that match their blood type
-            $requests = BloodRequest::where('status', 'pending')
-                ->where('expires_at', '>', now())
-                ->where('blood_type', $user->blood_type) // Only show matching blood types
-                ->with(['donations' => function($query) {
-                    $query->with('donor')->latest();
-                }])
-                ->with('user')
-                ->latest()
-                ->get()
-                ->map(function ($request) use ($user) {
-                    $donations = $request->donations->map(function ($donation) {
-                        return [
-                            'id' => $donation->id,
-                            'donor_id' => $donation->donor_id,
-                            'donor' => [
-                                'id' => $donation->donor->id,
-                                'name' => $donation->donor->name,
-                                'blood_type' => $donation->donor->blood_type,
-                                'last_donation' => $donation->donor->last_donation_date ? $donation->donor->last_donation_date->diffForHumans() : 'Never',
-                                'phone' => $donation->donor->phone,
-                            ],
-                            'status' => $donation->status,
-                            'donation_date' => $donation->donation_date,
-                            'units_donated' => $donation->units_donated,
-                            'donation_session' => $donation->donation_session,
-                            'created_at' => $donation->created_at,
-                        ];
-                    });
-                    
-                    return [
-                        'id' => $request->id,
-                        'hospital' => $request->user->name,
-                        'blood_type' => $request->blood_type,
-                        'units' => $request->units_required,
-                        'units_fulfilled' => $request->units_fulfilled,
-                        'posted' => $request->created_at->diffForHumans(),
-                        'urgency' => ucfirst($request->urgency_level),
-                        'donations' => $donations,
-                        'donor' => $donations->first() ? $donations->first()['donor'] : null,
-                    ];
-                });
+            $query->where('blood_type', $user->blood_type);
         } else {
-            // Hospital view - show ONLY your requests with donor registrations
-            $requests = BloodRequest::where('user_id', $user->id)
-                ->with(['donations' => function($query) {
-                    $query->with('donor')->latest();
-                }])
-                ->latest()
-                ->get()
-                ->map(function ($request) {
-                    $donations = $request->donations->map(function ($donation) {
-                        return [
-                            'id' => $donation->id,
-                            'donor_id' => $donation->donor_id,
-                            'donor' => [
-                                'id' => $donation->donor->id,
-                                'name' => $donation->donor->name,
-                                'blood_type' => $donation->donor->blood_type,
-                                'last_donation' => $donation->donor->last_donation_date ? $donation->donor->last_donation_date->diffForHumans() : 'Never',
-                                'phone' => $donation->donor->phone,
-                            ],
-                            'status' => $donation->status,
-                            'donation_date' => $donation->donation_date,
-                            'units_donated' => $donation->units_donated,
-                            'donation_session' => $donation->donation_session,
-                            'created_at' => $donation->created_at,
-                        ];
-                    });
-                    
-                    return [
-                        'id' => $request->id,
-                        'hospital' => $request->user->name,
-                        'blood_type' => $request->blood_type,
-                        'units' => $request->units_required,
-                        'units_fulfilled' => $request->units_fulfilled,
-                        'posted' => $request->created_at->diffForHumans(),
-                        'urgency' => ucfirst($request->urgency_level),
-                        'donations' => $donations,
-                        'donor' => $donations->first() ? $donations->first()['donor'] : null,
-                    ];
-                });
+            $query->where('user_id', $user->id);
         }
 
         return Inertia::render('Client/AvailableRequests', [
-            'requests' => $requests,
+            'requests' => $query->get(),
         ]);
     }
 
-    public function calendar()
+    public function registerDonation(DonationCreateRequest $request)
     {
-        $user = Auth::user();
-        
-        // Get donations for the current month
-        $donations = Donation::where('hospital_id', $user->id)
-            ->with(['donor', 'bloodRequest'])
-            ->whereMonth('donation_date', now()->month)
-            ->whereYear('donation_date', now()->year)
-            ->orderBy('donation_date')
-            ->get()
-            ->map(function ($donation) {
-                return [
-                    'id' => $donation->id,
-                    'title' => $donation->donor->name . ' - ' . $donation->blood_type,
-                    'date' => $donation->donation_date->format('Y-m-d'),
-                    'time' => $donation->donation_session ?? 'morning',
-                    'status' => $donation->status,
-                    'donor' => [
-                        'name' => $donation->donor->name,
-                        'blood_type' => $donation->donor->blood_type,
-                        'phone' => $donation->donor->phone,
-                    ],
-                    'blood_request' => [
-                        'blood_type' => $donation->bloodRequest->blood_type,
-                        'units_required' => $donation->bloodRequest->units_required,
-                    ],
-                ];
-            });
-
-        // Get calendar days for current month
-        $calendar = [];
-        $currentDate = now();
-        $daysInMonth = $currentDate->daysInMonth;
-        
-        for ($day = 1; $day <= $daysInMonth; $day++) {
-            $date = $currentDate->copy()->day($day);
-            $dayDonations = $donations->where('date', $date->format('Y-m-d'));
-            
-            $calendar[] = [
-                'date' => $date->format('Y-m-d'),
-                'day' => $day,
-                'dayName' => $date->format('D'),
-                'donations' => $dayDonations->values(),
-                'hasDonations' => $dayDonations->count() > 0,
-                'isToday' => $date->isToday(),
-                'isPast' => $date->isPast(),
-                'isWeekend' => $date->isWeekend(),
-            ];
+        try {
+            $this->donationService->registerDonation(
+                $request->blood_request_id,
+                Auth::id(),
+                $request->units_donated ?? 1,
+                $request->donation_date,
+                $request->donation_session
+            );
+            return back()->with('success', 'Donation registered successfully!');
+        } catch (\Exception $e) {
+            Log::error('Donation registration failed', ['error' => $e->getMessage()]);
+            return back()->with('error', $e->getMessage());
         }
-
-        return Inertia::render('Client/Calendar', [
-            'calendar' => $calendar,
-            'currentMonth' => $currentDate->format('F Y'),
-            'stats' => [
-                'totalDonations' => $donations->count(),
-                'completedDonations' => $donations->where('status', 'completed')->count(),
-                'scheduledDonations' => $donations->where('status', 'scheduled')->count(),
-                'pendingDonations' => $donations->whereIn('status', ['scheduled', 'accepted'])->count(),
-            ]
-        ]);
-    }
-
-    public function registerDonation(Request $request)
-    {
-        $validated = $request->validate([
-            'blood_request_id' => 'required|exists:blood_requests,id',
-            'donation_session' => 'required|in:morning,afternoon,evening',
-        ]);
-
-        $user = Auth::user();
-        $bloodRequest = BloodRequest::findOrFail($validated['blood_request_id']);
-
-        // Check if user already has any active donation (one donation at a time rule)
-        $activeDonation = Donation::where('donor_id', $user->id)
-            ->whereIn('status', ['scheduled', 'accepted', 'in_progress'])
-            ->first();
-
-        if ($activeDonation) {
-            return back()->with('error', 'You already have an active donation. Please complete it before registering for another.');
-        }
-
-        // Check if user already registered for this specific request
-        $existingDonation = Donation::where('donor_id', $user->id)
-            ->where('blood_request_id', $bloodRequest->id)
-            ->first();
-
-        if ($existingDonation) {
-            return back()->with('error', 'You have already registered for this donation.');
-        }
-
-        // Create donation registration record (1 unit per donation)
-        Donation::create([
-            'donor_id' => $user->id,
-            'blood_request_id' => $bloodRequest->id,
-            'hospital_id' => $bloodRequest->user_id,
-            'donation_date' => now()->addDays(1), // Schedule for tomorrow
-            'blood_type' => $user->blood_type,
-            'units_donated' => 1, // Fixed to 1 unit per donation
-            'status' => 'scheduled',
-            'donation_session' => $validated['donation_session'],
-            'donation_center' => $bloodRequest->user->name . ' Blood Bank',
-            'health_screening_passed' => true,
-            'hemoglobin_level' => 14.5,
-            'blood_pressure_systolic' => 120,
-            'blood_pressure_diastolic' => 80,
-            'temperature' => 98.6,
-        ]);
-
-        // Update blood request to reduce required units
-        $bloodRequest->units_required = max(0, $bloodRequest->units_required - 1);
-        $bloodRequest->save();
-
-        // If all required units are now fulfilled, mark request as fulfilled
-        if ($bloodRequest->units_required <= 0) {
-            $bloodRequest->status = 'fulfilled';
-            $bloodRequest->fulfilled_at = now();
-            $bloodRequest->units_fulfilled = ($bloodRequest->units_fulfilled ?? 0) + 1;
-            $bloodRequest->save();
-        }
-
-        return back()->with('success', 'Successfully registered for donation!');
     }
 
     public function acceptRejectDonation(Request $request)
@@ -407,154 +194,157 @@ class ClientController extends Controller
             'action' => 'required|in:accept,reject',
         ]);
 
-        $bloodRequest = BloodRequest::findOrFail($validated['blood_request_id']);
-        $donation = Donation::where('blood_request_id', $bloodRequest->id)
-            ->where('donor_id', $validated['donor_id'])
-            ->first();
+        try {
+            $donation = Donation::where('blood_request_id', $validated['blood_request_id'])
+                ->where('donor_id', $validated['donor_id'])
+                ->firstOrFail();
 
-        if (!$donation) {
-            return back()->with('error', 'Donation registration not found.');
-        }
-
-        if ($validated['action'] === 'accept') {
-            $donation->status = 'accepted';
-            $message = 'Donation accepted successfully!';
-        } else {
-            $donation->status = 'rejected';
-            $message = 'Donation rejected.';
-        }
-
-        $donation->save();
-
-        return back()->with('success', $message);
-    }
-
-    public function updateDonationStatus(Request $request)
-    {
-        \Log::info('updateDonationStatus called', $request->all());
-        
-        $validated = $request->validate([
-            'blood_request_id' => 'required|exists:blood_requests,id',
-            'donor_id' => 'required|exists:users,id',
-            'status' => 'required|in:scheduled,in_progress,completed,cancelled',
-        ]);
-
-        \Log::info('Validation passed', $validated);
-
-        $bloodRequest = BloodRequest::findOrFail($validated['blood_request_id']);
-        $donation = Donation::where('blood_request_id', $bloodRequest->id)
-            ->where('donor_id', $validated['donor_id'])
-            ->first();
-
-        if (!$donation) {
-            \Log::error('Donation not found', [
-                'blood_request_id' => $bloodRequest->id,
-                'donor_id' => $validated['donor_id']
-            ]);
-            return back()->with('error', 'No active donation found for this request.');
-        }
-
-        \Log::info('Donation found', ['donation_id' => $donation->id, 'current_status' => $donation->status]);
-
-        $oldStatus = $donation->status;
-        $donation->status = $validated['status'];
-        $saved = $donation->save();
-
-        \Log::info('Donation save result', ['saved' => $saved, 'new_status' => $donation->status]);
-
-        // If completed, update user's donation count and blood request
-        if ($validated['status'] === 'completed') {
-            $donor = $donation->donor;
-            $donor->increment('total_donations');
-            $donor->update(['last_donation_date' => now()]);
-            
-            // Update blood request to mark units as fulfilled
-            $bloodRequest->units_fulfilled = ($bloodRequest->units_fulfilled ?? 0) + $donation->units_donated;
-            $bloodRequest->save();
-            
-            \Log::info('Request updated', [
-                'units_fulfilled' => $bloodRequest->units_fulfilled,
-                'units_required' => $bloodRequest->units_required
-            ]);
-            
-            // If all required units are now fulfilled, mark request as fulfilled
-            if ($bloodRequest->units_fulfilled >= $bloodRequest->units_required) {
-                $bloodRequest->status = 'fulfilled';
-                $bloodRequest->fulfilled_at = now();
-                $bloodRequest->save();
-                \Log::info('Request marked as fulfilled');
+            if ($validated['action'] === 'accept') {
+                $donation->update(['status' => 'scheduled']);
+                return back()->with('success', 'Donation accepted and scheduled.');
+            } else {
+                $donation->update(['status' => 'cancelled']);
+                return back()->with('success', 'Donation request rejected.');
             }
+        } catch (\Exception $e) {
+            return back()->with('error', 'Operation failed.');
         }
-
-        return back()->with('success', 'Donation status updated successfully!');
-    }
-
-    public function storeDonation(Request $request)
-    {
-        $validated = $request->validate([
-            'blood_request_id' => 'required|exists:blood_requests,id',
-            'units_to_donate' => 'required|integer|min:1|max:5',
-        ]);
-
-        $user = Auth::user();
-        $bloodRequest = BloodRequest::findOrFail($validated['blood_request_id']);
-
-        // Create donation record
-        $donation = Donation::create([
-            'donor_id' => $user->id,
-            'blood_request_id' => $bloodRequest->id,
-            'hospital_id' => $bloodRequest->user_id,
-            'donation_date' => now(),
-            'blood_type' => $user->blood_type,
-            'units_donated' => $validated['units_to_donate'],
-            'status' => 'scheduled',
-            'donation_center' => 'Main Blood Bank',
-            'health_screening_passed' => true,
-            'hemoglobin_level' => 14.5,
-            'blood_pressure_systolic' => 120,
-            'blood_pressure_diastolic' => 80,
-            'temperature' => 98.6,
-        ]);
-
-        // Update user's donation count
-        $user->increment('total_donations');
-        $user->update(['last_donation_date' => now()]);
-
-        return back()->with('success', 'Donation scheduled successfully!');
     }
 
     public function inventory()
     {
         $user = Auth::user();
-        
-        // Only hospitals can access inventory
-        if (!$user->isHospital()) {
-            return redirect()->route('dashboard')->with('error', 'Access denied. Inventory is only available to hospitals.');
-        }
-        
-        $bloodStocks = BloodStock::where('hospital_id', $user->id)
-            ->get()
-            ->map(function ($stock) {
-                $availableUnits = $stock->getAvailableUnits();
-                $totalCapacity = $user->inventory_capacity ?? 1000; // Use hospital's capacity
-                return [
-                    'id' => $stock->id,
-                    'blood_type' => $stock->blood_type,
-                    'units_available' => $stock->units_available,
-                    'units_reserved' => $stock->units_reserved,
-                    'available_units' => $availableUnits,
-                    'expiry_date' => $stock->expiry_date,
-                    'storage_location' => $stock->storage_location,
-                    'total_capacity' => $totalCapacity,
-                    'status' => $stock->isCriticalStock() ? 'critical' : ($stock->isLowStock() ? 'low' : 'adequate'),
-                    'last_updated' => $stock->last_updated,
-                    'utilization' => $totalCapacity > 0 ? round(($availableUnits / $totalCapacity) * 100, 1) : 0,
-                ];
-            });
+        $stocks = BloodStock::where('hospital_id', $user->id)->get();
+        $capacity = $user->inventory_capacity ?? 1000;
+
+        $bloodStocks = $stocks->map(function ($stock) use ($capacity) {
+            $available = $stock->getAvailableUnits();
+            $utilization = $capacity > 0 ? round(($available / $capacity) * 100) : 0;
+
+            return [
+                'id' => $stock->id,
+                'blood_type' => $stock->blood_type,
+                'available_units' => $available,
+                'status' => $stock->isCriticalStock() ? 'critical' : ($stock->isLowStock() ? 'low' : 'adequate'),
+                'utilization' => $utilization,
+            ];
+        });
 
         return Inertia::render('Client/Inventory', [
             'bloodStocks' => $bloodStocks,
-            'hospitalCapacity' => $user->inventory_capacity ?? 1000,
+            'hospitalCapacity' => $capacity,
         ]);
+    }
+
+    public function calendar()
+    {
+        $user = Auth::user();
+        $donations = Donation::where('hospital_id', $user->id)
+            ->with(['donor', 'bloodRequest'])
+            ->get();
+
+        // Generate calendar grid for current month
+        $today = now();
+        $firstDayOfMonth = $today->copy()->firstOfMonth();
+        $lastDayOfMonth = $today->copy()->lastOfMonth();
+        $daysInMonth = $today->daysInMonth;
+        $startDayOfWeek = $firstDayOfMonth->dayOfWeek;
+
+        $calendar = [];
+
+        // Empty cells for days before the 1st of month
+        for ($i = 0; $i < $startDayOfWeek; $i++) {
+            $calendar[] = [
+                'date' => $firstDayOfMonth->copy()->subDays($startDayOfWeek - $i)->format('Y-m-d'),
+                'day' => '',
+                'isToday' => false,
+                'isPast' => true,
+                'isWeekend' => false,
+                'hasDonations' => false,
+                'donations' => []
+            ];
+        }
+
+        // Days of the month
+        for ($day = 1; $day <= $daysInMonth; $day++) {
+            $date = $firstDayOfMonth->copy()->addDays($day - 1);
+            $dateStr = $date->format('Y-m-d');
+            $isToday = $date->isToday();
+            $isPast = $date->isPast();
+            $isWeekend = $date->isWeekend();
+
+            // Get donations for this day
+            $dayDonations = $donations->filter(function ($donation) use ($dateStr) {
+                return $donation->donation_date && $donation->donation_date->format('Y-m-d') === $dateStr;
+            })->map(function ($donation) {
+                return [
+                    'id' => $donation->id,
+                    'status' => $donation->status,
+                    'time' => $donation->donation_session,
+                    'donor' => [
+                        'name' => $donation->donor->name,
+                        'blood_type' => $donation->donor->blood_type,
+                    ]
+                ];
+            })->values();
+
+            $calendar[] = [
+                'date' => $dateStr,
+                'day' => $day,
+                'isToday' => $isToday,
+                'isPast' => $isPast,
+                'isWeekend' => $isWeekend,
+                'hasDonations' => $dayDonations->count() > 0,
+                'donations' => $dayDonations->toArray()
+            ];
+        }
+
+        // Fill remaining cells to complete the grid (42 cells = 6 rows)
+        $remainingCells = 42 - count($calendar);
+        for ($i = 1; $i <= $remainingCells; $i++) {
+            $calendar[] = [
+                'date' => $lastDayOfMonth->copy()->addDays($i)->format('Y-m-d'),
+                'day' => '',
+                'isToday' => false,
+                'isPast' => false,
+                'isWeekend' => false,
+                'hasDonations' => false,
+                'donations' => []
+            ];
+        }
+
+        $stats = [
+            'totalDonations' => $donations->count(),
+            'completedDonations' => $donations->where('status', 'completed')->count(),
+            'scheduledDonations' => $donations->where('status', 'scheduled')->count(),
+            'pendingDonations' => $donations->whereIn('status', ['pending', 'accepted', 'in_progress'])->count(),
+        ];
+
+        return Inertia::render('Client/Calendar', [
+            'donations' => $donations,
+            'calendar' => $calendar,
+            'currentMonth' => $today->format('F Y'),
+            'stats' => $stats,
+        ]);
+    }
+
+    public function updateDonationStatus(Request $request)
+    {
+        $validated = $request->validate([
+            'donation_id' => 'required|exists:donations,id',
+            'status' => 'required|in:scheduled,in_progress,completed,cancelled',
+        ]);
+
+        try {
+            $donation = Donation::findOrFail($validated['donation_id']);
+            if ($validated['status'] === 'completed') {
+                $this->donationService->completeDonation($donation);
+            } else {
+                $donation->update(['status' => $validated['status']]);
+            }
+            return back()->with('success', 'Donation status updated.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Update failed.');
+        }
     }
 }
