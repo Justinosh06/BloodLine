@@ -15,14 +15,14 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role',       // 'donor' or 'hospital'
-        'blood_type', // O+, A-, etc.
+        'role',
+        'blood_type',
         'phone',
         'address',
         'is_available',
         'last_donation_date',
         'total_donations',
-        'inventory_capacity', // Hospital-specific inventory capacity
+        'inventory_capacity',
         'hospital_name',
         'hospital_license',
         'date_of_birth',
@@ -73,7 +73,7 @@ class User extends Authenticatable
 
         if ($this->last_donation_date) {
             $daysSinceLastDonation = $this->last_donation_date->diffInDays(now());
-            return $daysSinceLastDonation >= 56; // 8 weeks minimum between donations
+            return $daysSinceLastDonation >= 56;
         }
 
         return true;

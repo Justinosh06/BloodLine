@@ -15,7 +15,6 @@ class DonationService
         return DB::transaction(function () use ($requestId, $donorId, $units, $donationDate, $donationSession) {
             $donor = User::findOrFail($donorId);
             
-            // Check if donor is eligible to donate (56-day waiting period)
             if (!$donor->canDonate()) {
                 $daysRemaining = $donor->last_donation_date 
                     ? max(0, 56 - $donor->last_donation_date->diffInDays(now())) 

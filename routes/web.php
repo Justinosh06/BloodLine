@@ -58,4 +58,13 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
+/*
+|--------------------------------------------------------------------------
+| Fallback Route - Handles 404 errors
+|--------------------------------------------------------------------------
+*/
+Route::fallback(function () {
+    return Inertia::render('Error', ['status' => 404]);
+});
+
 require __DIR__.'/auth.php';

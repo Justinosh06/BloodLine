@@ -9,12 +9,11 @@ import {
     DropdownMenuTrigger,
     DropdownMenuSeparator,
 } from "@/Components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/Components/ui/avatar";
 import { Toaster, toast } from 'sonner';
 import { 
     LayoutDashboard, Droplets, History as HistoryIcon, 
     PlusCircle, User, LogOut, Settings, Bell, 
-    Calendar, Menu, X, ChevronRight 
+    Calendar, Menu, X, ChevronRight, Building2, Shield
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -33,7 +32,6 @@ export default function AuthenticatedLayout({ header, children }) {
         }
     }, [flash]);
 
-    // Close mobile menu when window is resized to desktop
     useEffect(() => {
         const handleResize = () => {
             if (window.innerWidth >= 768) {
@@ -115,12 +113,16 @@ export default function AuthenticatedLayout({ header, children }) {
                                 <DropdownMenuTrigger asChild>
                                     <button className="flex items-center gap-2 md:gap-3 p-1 pl-1 md:pl-3 rounded-full border border-gray-200 bg-white hover:border-gray-300 transition-all shadow-sm">
                                         <span className="text-sm font-semibold text-gray-700 hidden sm:block">{user.name}</span>
-                                        <Avatar className="h-8 w-8 rounded-full border border-gray-100">
-                                            <AvatarImage src={`https://avatar.vercel.sh/${user.name}.png`} alt={user.name} />
-                                            <AvatarFallback className="bg-red-50 text-red-600 font-bold">
-                                                {user.name?.charAt(0)}
-                                            </AvatarFallback>
-                                        </Avatar>
+                                        <div className={cn(
+                                            "h-8 w-8 rounded-full flex items-center justify-center border",
+                                            user.role === 'donor' && "bg-red-50 border-red-100 text-red-600",
+                                            user.role === 'hospital' && "bg-blue-50 border-blue-100 text-blue-600",
+                                            user.role === 'admin' && "bg-indigo-50 border-indigo-100 text-indigo-600"
+                                        )}>
+                                            {user.role === 'donor' && <Droplets size={16} />}
+                                            {user.role === 'hospital' && <Building2 size={16} />}
+                                            {user.role === 'admin' && <Shield size={16} />}
+                                        </div>
                                     </button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-64 p-2 rounded-2xl border-gray-200 shadow-xl mt-2 animate-in fade-in zoom-in-95 duration-200 z-[70]">

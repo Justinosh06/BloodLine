@@ -71,7 +71,6 @@ export default function Calendar({ donations = [], calendar, currentMonth, stats
     const days = Array.isArray(calendar) ? calendar : [];
 
     const handleDonationClick = (donation) => {
-        // Find full donation details from the donations array
         const fullDonation = donations.find(d => d.id === donation.id);
         if (fullDonation) {
             setSelectedDonation(fullDonation);

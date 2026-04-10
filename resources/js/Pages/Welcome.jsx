@@ -297,7 +297,7 @@ export default function Welcome() {
                                 </Button>
                             </Link>
                             <Link href="/login">
-                                <Button variant="outline" className="h-12 px-10 font-bold text-white border-gray-600 hover:bg-white hover:text-gray-900">
+                                <Button variant="outline" className="h-12 px-10 font-bold text-black border-gray-600 hover:bg-white hover:text-gray-900">
                                     I already have an account
                                 </Button>
                             </Link>

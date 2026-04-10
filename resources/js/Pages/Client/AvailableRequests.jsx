@@ -48,7 +48,6 @@ export default function AvailableRequests({ auth, requests }) {
     const openRegistrationModal = (request) => {
         setSelectedRequest(request);
         setData('blood_request_id', request.id);
-        // Set default date to tomorrow
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         setData('donation_date', tomorrow.toISOString().split('T')[0]);
@@ -77,7 +76,6 @@ export default function AvailableRequests({ auth, requests }) {
                 });
             },
             onError: (errors) => {
-                // Error toast is shown via flash message from backend
                 console.error('Registration failed:', errors);
             }
         });

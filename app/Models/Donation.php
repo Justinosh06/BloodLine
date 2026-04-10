@@ -17,7 +17,7 @@ class Donation extends Model
         'donation_date',
         'blood_type',
         'units_donated',
-        'status',            // 'scheduled', 'completed', 'cancelled', 'no_show'
+        'status',
         'donation_center',
         'notes',
         'health_screening_passed',

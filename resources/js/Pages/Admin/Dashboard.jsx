@@ -64,33 +64,6 @@ export default function AdminDashboard({ auth, stats, recentRequests, bloodInven
         }, 2000);
     };
 
-    const handleSystemAudit = () => {
-        const toastId = toast.loading("Initializing system-wide audit...");
-        
-        const stages = [
-            "Scanning biological inventory nodes...",
-            "Verifying hospital authorization tokens...",
-            "Checking donor encryption integrity...",
-            "Optimizing emergency broadcast routes...",
-            "Finalizing system health check..."
-        ];
-
-        let stageIndex = 0;
-        const interval = setInterval(() => {
-            if (stageIndex < stages.length) {
-                toast.loading(stages[stageIndex], { id: toastId });
-                stageIndex++;
-            } else {
-                clearInterval(interval);
-                toast.success("System Audit Complete: All nodes optimal.", { 
-                    id: toastId,
-                    description: "Health index: 98.4% | Latency: 24ms",
-                    duration: 5000
-                });
-            }
-        }, 1200);
-    };
-
     return (
         <AdminLayout>
             <Head title="Admin Dashboard" />
@@ -115,12 +88,6 @@ export default function AdminDashboard({ auth, stats, recentRequests, bloodInven
                             className="w-full sm:w-auto bg-white text-gray-900 border border-gray-200 hover:bg-gray-50 rounded-full px-6 h-12 font-bold shadow-sm"
                         >
                             Generate Report
-                        </Button>
-                        <Button 
-                            onClick={handleSystemAudit}
-                            className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white rounded-full px-6 h-12 font-bold shadow-lg shadow-red-100 transition-all hover:scale-105 active:scale-95"
-                        >
-                            System Audit
                         </Button>
                     </div>
                 </div>

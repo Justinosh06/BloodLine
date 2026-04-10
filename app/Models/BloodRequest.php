@@ -11,17 +11,17 @@ class BloodRequest extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id',           // Hospital that made the request
+        'user_id',
         'blood_type',
         'units_required',
-        'urgency_level',     // 'low', 'medium', 'high', 'critical'
+        'urgency_level',
         'patient_name',
         'hospital_name',
         'hospital_address',
         'contact_person',
         'contact_phone',
         'reason',
-        'status',            // 'pending', 'fulfilled', 'cancelled', 'expired'
+        'status',
         'units_fulfilled',
         'fulfilled_at',
         'expires_at',

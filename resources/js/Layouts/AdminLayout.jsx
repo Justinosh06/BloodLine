@@ -9,7 +9,6 @@ export default function AdminLayout({ children }) {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const { url } = usePage();
 
-    // Close mobile menu when window is resized to desktop
     useEffect(() => {
         const handleResize = () => {
             if (window.innerWidth >= 1024) {
