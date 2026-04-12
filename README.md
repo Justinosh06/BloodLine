@@ -195,7 +195,3 @@ Donations flow through statuses:
 ## License
 
 This project is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
-
-## Support
-
-For support, email support@bloodline.com or open an issue on GitHub.
